@@ -9,6 +9,9 @@ Requires **Node.js 24.14 or newer within the 24.x series**. The app has no third
 ```sh
 git clone https://github.com/gaferto612/Marketing101.git
 cd Marketing101
+# While the implementation pull request is unmerged:
+git switch codex/marketing101-demo
+# After merging, use main instead.
 # Copy .env.example to .env if you need to change the defaults.
 npm start
 ```
