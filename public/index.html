@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Marketing101 — plan, review, and run your marketing campaigns.">
+  <title>Marketing101 · Your campaign companion</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23235a43'/%3E%3Ctext x='6' y='24' font-size='27' fill='%23dcf397'%3Em%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <section id="auth-screen" class="auth-layout" hidden>
+    <div class="auth-story">
+      <a class="logo" href="/" aria-label="Marketing101 home"><span class="logo-mark">m</span> Marketing<span>101</span></a>
+      <div><p class="eyebrow">YOUR CAMPAIGN COMPANION</p><h1>A little direction.<br>A lot of momentum.</h1><p>Turn the thing you want to promote into a campaign you can actually run.</p><div class="story-flow"><span>Describe</span><b>→</b><span>Review</span><b>→</b><span>Launch</span></div></div>
+      <p class="small">Built around your brand. Always under your control.</p>
+    </div>
+    <div class="auth-panel">
+      <form id="auth-form" class="auth-card">
+        <span class="pill demo">DEMO WORKSPACE</span>
+        <h2 id="auth-title">Welcome back.</h2>
+        <p id="auth-description" class="muted">Sign in to your campaign workspace.</p>
+        <label>Email<input name="email" type="email" autocomplete="email" required maxlength="254"></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required minlength="12" maxlength="256"><small>At least 12 characters.</small></label>
+        <label id="invite-field" hidden>Invitation code <span class="muted">(if required)</span><input name="code" autocomplete="off" maxlength="200"></label>
+        <button type="submit" class="button primary full" id="auth-submit">Sign in →</button>
+        <p id="auth-error" class="error" role="alert"></p>
+        <button type="button" class="text-button full" id="auth-toggle">New here? Create an account</button>
+        <p class="small muted">Demo content and publishing. No real advertising spend.</p>
+      </form>
+    </div>
+  </section>
+  <div id="app-shell" class="app-shell" hidden>
+    <aside class="sidebar">
+      <a class="logo" href="/" aria-label="Marketing101 home"><span class="logo-mark">m</span> Marketing<span>101</span></a>
+      <p class="nav-label">WORKSPACE</p>
+      <nav aria-label="Main navigation">
+        <button data-view="dashboard"><span aria-hidden="true">◫</span> Overview</button>
+        <button data-view="composer"><span aria-hidden="true">✧</span> Create campaign</button>
+        <button data-view="brand"><span aria-hidden="true">◇</span> Brand profile</button>
+        <button data-view="automation"><span aria-hidden="true">⇄</span> Automation</button>
+      </nav>
+      <div class="sidebar-bottom"><div class="demo-note"><span class="dot"></span><strong>Demo workspace</strong><p>Explore the full flow.<br>Nothing goes live.</p></div><p id="account-email" class="small"></p></div>
+    </aside>
+    <main>
+      <header class="topbar"><span id="breadcrumb">Workspace / Overview</span><div class="topbar-actions"><span class="pill demo">DEMO MODE</span><button id="logout" class="text-button">Sign out ↗</button></div></header>
+      <div id="view" class="view"></div>
+    </main>
+  </div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+</body>
+</html>
