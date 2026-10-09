@@ -7,6 +7,7 @@ const modulePath = process.env.PLAYWRIGHT_MODULE;
 const { chromium } = await import(modulePath ? pathToFileURL(modulePath).href : 'playwright');
 const browser = await chromium.launch({ headless: true, ...(process.env.TEST_BROWSER_CHANNEL ? { channel: process.env.TEST_BROWSER_CHANNEL } : {}) });
 const base = process.env.TEST_ORIGIN || 'http://127.0.0.1:3101';
+const pagesMode = process.env.TEST_PAGES === 'true';
 const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
@@ -15,10 +16,12 @@ await mkdir('test-results', { recursive: true });
 async function fits() { assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'Page must fit viewport'); }
 try {
   await page.goto(base);
+  if (!pagesMode) {
   await page.getByRole('button', { name: 'New here? Create an account' }).click();
   await page.getByLabel('Email', { exact: true }).fill(`browser-${Date.now()}@example.com`);
   await page.getByLabel(/^Password/).fill('browser smoke password');
   await page.getByRole('button', { name: 'Create account →', exact: true }).click();
+  }
   await page.getByRole('heading', { name: 'Your marketing, in motion.' }).waitFor();
   await fits();
   await page.getByRole('button', { name: 'Set up your brand' }).click();
@@ -82,11 +85,19 @@ try {
   await page.getByRole('button', { name: 'Create campaign', exact: true }).click(); await fits();
   await page.getByRole('button', { name: 'Automation', exact: true }).click(); await fits();
   assert.ok(await page.getByLabel('Enable automatic mode for matching campaigns', { exact: true }).isChecked());
-  await page.getByRole('button', { name: 'Sign out ↗', exact: true }).click();
-  await page.getByRole('heading', { name: 'Welcome back.', exact: true }).waitFor(); await fits();
-  await page.screenshot({ path: 'test-results/mobile-signin.png', fullPage: true });
+  if (pagesMode) {
+    page.once('dialog', dialog => dialog.accept());
+    await page.getByRole('button', { name: 'Reset demo', exact: true }).click();
+    await page.getByRole('heading', { name: 'Your marketing, in motion.' }).waitFor();
+    assert.equal(await page.locator('.campaign-row').count(), 0);
+    await fits();
+  } else {
+    await page.getByRole('button', { name: 'Sign out ↗', exact: true }).click();
+    await page.getByRole('heading', { name: 'Welcome back.', exact: true }).waitFor(); await fits();
+    await page.screenshot({ path: 'test-results/mobile-signin.png', fullPage: true });
+  }
   assert.deepEqual(errors, []);
-  console.log('Browser smoke passed: registration, brand, missing fields, regeneration, editing, approval, worker delivery, persistence, automation, mobile layouts, XSS escaping, logout.');
+  console.log(`Browser smoke passed (${pagesMode ? 'Pages browser demo' : 'Node server'}): brand, missing fields, regeneration, editing, approval, demo delivery, persistence, automation, mobile layouts, XSS escaping, ${pagesMode ? 'reset' : 'authentication/logout'}.`);
 } catch (error) {
   await page.screenshot({ path: 'test-results/failure.png', fullPage: true });
   console.error('Browser state:', await page.locator('h1,h2').allTextContents());

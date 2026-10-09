@@ -2,6 +2,23 @@
 
 A personal campaign companion: describe a promotion, edit its plan and content, review the exact campaign, and run it through a clearly labeled demo integration.
 
+## GitHub Pages browser demo
+
+Open **https://gaferto612.github.io/Marketing101/** for the static browser demo. The Pages workflow builds an explicit allowlist of public assets into `.pages-dist/` and deploys it through GitHub Actions. Pages settings use **GitHub Actions** as the publishing source; leave **Custom domain** blank to use the default project URL. The deployment runs only from `main`, whose pull-request and CI protections remain enabled.
+
+This version runs the campaign workflow entirely in your browser and saves brand/campaign data in local storage. It has **no account authentication or server**, never publishes to real accounts, and never spends money. Its scheduling is a browser simulation: the page must remain open; overdue pieces run when you reopen it. Data is specific to this browser/origin and clearing browser storage removes it. The Reset demo button deletes the local demo records. Client-side policy and budget checks are demonstrations, not security controls. Web Locks serialize local updates across tabs where supported.
+
+The authenticated Node.js/SQLite application below remains available separately for a server deployment. It enforces its approvals and limits on the backend and has a separate background worker. GitHub Pages cannot host that server process.
+
+To preview exactly what Pages publishes:
+
+```sh
+npm run build:pages
+node tools/preview-pages.mjs
+```
+
+Open `http://127.0.0.1:3102/Marketing101/`. This checks the same project-path asset URLs, rather than serving the app from `/`.
+
 ## Quick start
 
 Requires **Node.js 24.14 or newer within the 24.x series**. The app has no third-party runtime dependencies. SQLite is built into Node.js; its API is still evolving, so the runtime is pinned to the tested major version.
@@ -9,9 +26,6 @@ Requires **Node.js 24.14 or newer within the 24.x series**. The app has no third
 ```sh
 git clone https://github.com/gaferto612/Marketing101.git
 cd Marketing101
-# While the implementation pull request is unmerged:
-git switch codex/marketing101-demo
-# After merging, use main instead.
 # Copy .env.example to .env if you need to change the defaults.
 npm start
 ```
@@ -85,6 +99,6 @@ npm test
 npm run check
 ```
 
-The Node test suite covers parsing, approval invalidation, revision conflicts, account isolation, authentication/logout, CSRF/origin rejection, budget caps, automatic policy revocation/daily limits, pause/resume/cancel, adapter failures/retries, exact receipt content, and two independent workers sharing persisted jobs. CI runs both commands on Node 24.16.0.
+The Node test suite covers parsing, approval invalidation, revision conflicts, account isolation, authentication/logout, CSRF/origin rejection, budget caps, automatic policy revocation/daily limits, pause/resume/cancel, adapter failures/retries, exact receipt content, and two independent workers sharing persisted jobs. It also tests the Pages artifact allowlist and the browser demo's persistence, approval, limits, and duplicate prevention. CI runs both commands on Node 24.16.0.
 
 See `docs/VERIFICATION.md` for the observed test and browser results. No real-provider functionality is claimed or verified.

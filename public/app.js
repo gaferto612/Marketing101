@@ -1,4 +1,6 @@
 const $ = selector => document.querySelector(selector);
+const browserDemo = document.querySelector('meta[name="marketing101-mode"]')?.content === 'browser-demo';
+let demoTransport;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const money = cents => new Intl.NumberFormat('en-DK', { style: 'currency', currency: 'DKK' }).format(cents / 100);
 const date = ms => new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(ms);
@@ -8,6 +10,10 @@ const state = { me: null, brand: null, policy: null, campaigns: [], view: 'dashb
 let toastTimer;
 function toast(message) { $('#toast').textContent = message; $('#toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').hidden = true, 5000); }
 async function api(path, method = 'GET', data) {
+  if (browserDemo) {
+    demoTransport ||= import('./pages-demo.js');
+    return (await demoTransport).demoApi(path, method, data);
+  }
   const res = await fetch(`/api${path}`, {
     method, headers: { 'Content-Type': 'application/json', ...(state.me ? { 'X-CSRF-Token': state.me.csrf } : {}) },
     ...(data === undefined ? {} : { body: JSON.stringify(data) })
@@ -48,7 +54,14 @@ $('#auth-form').addEventListener('submit', async event => {
   catch (error) { $('#auth-error').textContent = error.message; }
   finally { button.disabled = false; }
 });
-$('#logout').addEventListener('click', () => busy($('#logout'), async () => { await api('/logout', 'POST', {}); state.me = null; state.campaign = null; state.message = ''; state.pending = null; showAuth(); }));
+$('#logout').addEventListener('click', () => busy($('#logout'), async () => {
+  if (browserDemo) {
+    if (!confirm('Delete this browser’s Marketing101 demo data? This cannot be undone.')) return;
+    await api('/reset', 'POST', {}); state.campaign = null; state.message = ''; state.pending = null; state.dirty = false;
+    await loadWorkspace(); toast('Browser demo reset.'); return;
+  }
+  await api('/logout', 'POST', {}); state.me = null; state.campaign = null; state.message = ''; state.pending = null; showAuth();
+}));
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => navigate(button.dataset.view)));
 function navigate(view) {
   if (state.dirty && !confirm('Discard your unsaved campaign changes?')) return;
@@ -80,7 +93,7 @@ function brandForm() {
   const b = state.brand || {};
   const input = (key, label, placeholder, max = 2000) => `<label>${label}<input name="${key}" value="${esc(b[key])}" placeholder="${esc(placeholder)}" maxlength="${max}" required></label>`;
   $('#view').innerHTML = `<div class="page-heading"><div><p class="eyebrow">THE FOUNDATION</p><h1>Make it sound like you.</h1><p>Give your companion the facts it needs to create relevant campaigns.</p></div>${state.brand ? '<span class="pill completed">PROFILE SAVED</span>' : ''}</div>
-    <form id="brand-form"><section class="card"><h2>Your business</h2><p class="muted">These details are private to your account.</p><div class="form-grid">${input('name', 'Business name', 'Your business', 120)}${input('product', 'Main product or offer', 'Your sales course', 200)}<label class="span-2">Business details<textarea name="business" maxlength="2000" required placeholder="What do you offer, and who is it for?">${esc(b.business)}</textarea></label>${input('audience', 'Default audience', 'Danish small-business owners', 400)}${input('tone', 'Brand tone', 'Friendly, clear, practical', 120)}<label class="span-2">Website or product link<input name="website" type="url" value="${esc(b.website)}" placeholder="https://your-business.com/course" required maxlength="1000"><small>Used as the campaign link. Website content is not imported in this release.</small></label></div></section>
+    <form id="brand-form"><section class="card"><h2>Your business</h2><p class="muted">${browserDemo ? 'Saved in this browser only, without account authentication.' : 'These details are private to your account.'}</p><div class="form-grid">${input('name', 'Business name', 'Your business', 120)}${input('product', 'Main product or offer', 'Your sales course', 200)}<label class="span-2">Business details<textarea name="business" maxlength="2000" required placeholder="What do you offer, and who is it for?">${esc(b.business)}</textarea></label>${input('audience', 'Default audience', 'Danish small-business owners', 400)}${input('tone', 'Brand tone', 'Friendly, clear, practical', 120)}<label class="span-2">Website or product link<input name="website" type="url" value="${esc(b.website)}" placeholder="https://your-business.com/course" required maxlength="1000"><small>Used as the campaign link. Website content is not imported in this release.</small></label></div></section>
     <section class="card"><h2>Approved marketing claims</h2><p class="muted">Only add facts you can substantiate. Leave blank if you have no approved claims.</p><label>One claim per line<textarea name="claims" maxlength="4000" placeholder="For example, the actual course duration or topics covered.">${esc(b.claims)}</textarea></label><div class="note">The demo planner uses product details and your approved claims. It does not invent testimonials, results, or performance promises. Tone is stored in the brief; templates do not reliably adapt writing style yet.</div><button class="button primary" type="submit">Save brand profile →</button></section></form>`;
   $('#brand-form').addEventListener('submit', event => { event.preventDefault(); busy(event.submitter, async () => { state.brand = await api('/brand', 'PUT', Object.fromEntries(new FormData(event.target))); toast('Brand profile saved.'); navigate('composer'); }); });
 }
@@ -190,4 +203,19 @@ setInterval(async () => {
     }
   } catch (error) { if (state.me) toast(error.message); }
 }, 3000);
-try { state.me = await api('/me'); await loadWorkspace(); } catch { showAuth(); }
+if (browserDemo) {
+  $('.topbar .pill').textContent = 'BROWSER DEMO';
+  $('#logout').textContent = 'Reset demo';
+  $('.demo-note p').textContent = 'Saved on this browser only. No real publishing.';
+  const notice = document.createElement('div');
+  notice.className = 'pages-disclaimer';
+  notice.textContent = 'GitHub Pages browser demo · Data stays in this browser, without account authentication. Scheduled demos run only while this page is open; overdue pieces run when you reopen it. No real publishing, spending, or performance metrics.';
+  $('.topbar').after(notice);
+  try { state.me = await api('/me'); await loadWorkspace(); }
+  catch (error) {
+    $('#app-shell').hidden = false;
+    $('#view').innerHTML = `<div class="card"><h1>Browser storage is unavailable</h1><p>${esc(error.message)}</p><p>Allow local storage for this site, or use Reset demo if saved data is corrupted.</p></div>`;
+  }
+} else {
+  try { state.me = await api('/me'); await loadWorkspace(); } catch { showAuth(); }
+}

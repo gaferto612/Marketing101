@@ -1,5 +1,13 @@
 # Verification — 9 October 2026
 
+## GitHub Pages remediation
+
+The old branch-root/Jekyll publishing configuration did not package the application entry point from `public/`; its latest deployment ended with `Deployment cancelled`. The application's root-relative asset/API URLs also could not serve a functional app at `/Marketing101/` on a static host.
+
+Added a dedicated Pages workflow that packages only public UI assets, uses relative project-path URLs, and selects an explicit browser-demo transport. The full Node/SQLite server remains separate and unchanged. The browser version has no account authentication, no server worker, and no real publishing/spending. Scheduling is simulated only while the page is open (overdue jobs resume when reopened), with records saved in local browser storage.
+
+After this change, all **14** Node tests passed. The static artifact was served at `/Marketing101/`, and the isolated Chrome smoke test passed at desktop and mobile sizes through brand setup, missing-field follow-ups, regeneration/editing, exact approval, three simulated deliveries, reload persistence, automation rules, escaped script content, and reset. The artifact allowlist excludes server files, credentials, and runtime data. Deployment and the public URL are verified separately after merge.
+
 Verified locally on Windows with Node.js 24.16.0 and an isolated headless Chrome browser. This is a working demo release, not a deployed production service or a verified real-account integration.
 
 ## Automated checks
