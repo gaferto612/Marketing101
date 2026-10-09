@@ -1,5 +1,15 @@
 # Verification — 9 October 2026
 
+## Free workspace release
+
+All **22** Node tests passed after adding the free tools. Coverage now includes Arabic request digits/durations, optional links, approved product-fact snapshots, six content formats, workspace validation and optimistic revision conflicts, null-aware manual metrics, CSV formula escaping, Unicode-safe UTC calendar exports, legacy Pages migration, safe campaign duplication, and validation-before-replacement backup restoration. Authenticated-server tests verify restoration changes only the requesting account and recreates campaigns as drafts without jobs/receipts.
+
+`tools/workspace-smoke.mjs` passed in isolated Chrome sessions for **both** the static Pages artifact and the authenticated Node server at desktop/mobile sizes. It exercised product save, Arabic content generation and editing, readiness marking, saved content reuse in a campaign, approval/completion, campaign CSV export and duplication, three PNG size exports (dimensions checked from PNG headers), content CSV, six calendar entries, manual CTR/ROAS calculation, JSON backup/restore, reload persistence, mobile layouts, script escaping, and reset/logout. Exported graphics and mobile screens were visually inspected. The original Pages campaign smoke test also passed after the shared interface changes.
+
+The tools use no external AI or marketing APIs. Content framing is template-based, not automatic translation or fact verification. Generated graphics are canvas text designs. Manual actual-results records are separated from simulated execution. Backups omit automation permission and executable jobs; restored campaigns are unapproved and automatic mode is disabled. Runtime test files and dummy-account data remain ignored by Git.
+
+Optional browser verification command: start either the Pages preview or Node app and run `node tools/workspace-smoke.mjs`. Use the existing Playwright/browser environment settings from the browser verification section. Set `TEST_SERVER=true` and `TEST_ORIGIN=http://127.0.0.1:3101` for the authenticated server; otherwise the script defaults to the static project subpath at port 3102. Public-site verification follows the protected-branch deployment.
+
 ## GitHub Pages remediation
 
 The old branch-root/Jekyll publishing configuration did not package the application entry point from `public/`; its latest deployment ended with `Deployment cancelled`. The application's root-relative asset/API URLs also could not serve a functional app at `/Marketing101/` on a static host.

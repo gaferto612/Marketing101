@@ -4,9 +4,11 @@ import { randomBytes, randomUUID, scrypt, timingSafeEqual, createHash } from 'no
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { fork } from 'node:child_process';
-import { openDatabase } from './db.js';
+import { openDatabase, transaction, event } from './db.js';
 import { InputError, validateBrand, parseRequest, plan, variation, text } from './planner.js';
 import { campaignFor, createCampaign, saveCampaign, transition, policyFor, validatePolicy } from './engine.js';
+import { freshWorkspace, validateWorkspace, normalizeBackup } from '../public/marketing-tools.js';
+import { validateCampaign } from './planner.js';
 
 const derive = promisify(scrypt);
 const hash = token => createHash('sha256').update(token).digest('hex');
@@ -52,11 +54,11 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
     res.setHeader('Set-Cookie', cookie(token));
     return { email: user.email, csrf };
   }
-  async function body(req) {
+  async function body(req, limit = 128000) {
     let size = 0, chunks = [];
     for await (const chunk of req) {
       size += chunk.length;
-      if (size > 128000) throw new InputError('Request is too large.', 413);
+      if (size > limit) throw new InputError('Request is too large.', 413);
       chunks.push(chunk);
     }
     try { return JSON.parse(Buffer.concat(chunks).toString() || '{}'); }
@@ -72,7 +74,7 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
       metrics: { mode: 'demo', reach: null, clicks: null, conversions: null }
     };
   }
-  const staticFiles = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'] };
+  const staticFiles = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/marketing-tools.js': ['marketing-tools.js', 'text/javascript'], '/workspace-ui.js': ['workspace-ui.js', 'text/javascript'] };
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -118,6 +120,48 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
       if (!auth) throw new InputError('Sign in to continue.', 401);
       if (req.method !== 'GET' && req.headers['x-csrf-token'] !== auth.csrf) throw new InputError('Session verification failed. Refresh and try again.', 403);
       const user = auth.user_id;
+      if (['/api/restore', '/api/validate-backup'].includes(pathname) && req.method === 'POST') {
+        const input = await body(req, 3100000);
+        let backup;
+        try { backup = normalizeBackup(input, validateBrand, validateCampaign); } catch (error) { throw new InputError(error.message); }
+        if (pathname === '/api/validate-backup') return reply({ products: backup.workspace.products.length, drafts: backup.workspace.drafts.length, campaigns: backup.campaigns.length, reports: backup.workspace.results.length });
+        transaction(db, () => {
+          // Replace only this authenticated user's records; imports get fresh global IDs.
+          for (const table of ['deliveries', 'events', 'jobs']) db.prepare(`DELETE FROM ${table} WHERE campaign_id IN (SELECT id FROM campaigns WHERE user_id=?)`).run(user);
+          db.prepare('DELETE FROM campaigns WHERE user_id=?').run(user);
+          db.prepare('DELETE FROM brands WHERE user_id=?').run(user);
+          if (backup.brand) db.prepare('INSERT INTO brands(user_id,data) VALUES(?,?)').run(user, JSON.stringify(backup.brand));
+          const mapping = new Map();
+          for (const c of backup.campaigns) {
+            const newId = randomUUID(); mapping.set(c.id, newId);
+            db.prepare('INSERT INTO campaigns(id,user_id,data,created) VALUES(?,?,?,?)').run(newId, user, JSON.stringify(c.data), Date.now());
+            event(db, newId, 'Restored as an unapproved draft. No jobs or receipts imported.');
+          }
+          for (const r of backup.workspace.results) r.campaignId = mapping.get(r.campaignId) || '';
+          const previousWorkspace = db.prepare('SELECT data FROM workspaces WHERE user_id=?').get(user);
+          backup.workspace.revision = (previousWorkspace ? JSON.parse(previousWorkspace.data).revision : 0) + 1;
+          db.prepare('INSERT INTO workspaces(user_id,data) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET data=excluded.data').run(user, JSON.stringify(backup.workspace));
+          db.prepare('DELETE FROM policies WHERE user_id=?').run(user);
+        });
+        return reply({ ok: true, campaigns: backup.campaigns.length });
+      }
+      if (pathname === '/api/workspace') {
+        if (req.method === 'GET') {
+          const row = db.prepare('SELECT data FROM workspaces WHERE user_id=?').get(user);
+          return reply(row ? JSON.parse(row.data) : freshWorkspace());
+        }
+        if (req.method === 'PUT') {
+          const input = await body(req, 2100000);
+          const row = db.prepare('SELECT data FROM workspaces WHERE user_id=?').get(user);
+          const previous = row ? JSON.parse(row.data) : freshWorkspace();
+          if (input.revision !== previous.revision) throw new InputError('Workspace changed in another tab. Refresh before saving.', 409);
+          let workspace;
+          try { workspace = validateWorkspace(input); } catch (error) { throw new InputError(error.message); }
+          workspace.revision = previous.revision + 1;
+          db.prepare('INSERT INTO workspaces(user_id,data) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET data=excluded.data').run(user, JSON.stringify(workspace));
+          return reply(workspace);
+        }
+      }
       if (pathname === '/api/me' && req.method === 'GET') return reply({ email: auth.email, csrf: auth.csrf });
       if (pathname === '/api/logout' && req.method === 'POST') {
         db.prepare('DELETE FROM sessions WHERE token=?').run(auth.token);
@@ -154,11 +198,18 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
         const campaign = createCampaign(db, user, plan(input.message, brand, parsed.values));
         return reply({ missing: [], campaign: details(user, campaign.id) }, 201);
       }
-      const match = pathname.match(/^\/api\/campaigns\/([a-f0-9-]+)(?:\/(action|regenerate))?$/);
+      const match = pathname.match(/^\/api\/campaigns\/([a-f0-9-]+)(?:\/(action|regenerate|duplicate))?$/);
       if (match) {
         const [, id, operation] = match;
         if (!operation && req.method === 'GET') return reply(details(user, id));
         const input = await body(req);
+        if (operation === 'duplicate' && req.method === 'POST') {
+          const original = campaignFor(db, user, id);
+          if (input.revision !== original.revision) throw new InputError('Campaign changed. Refresh before duplicating.', 409);
+          const copy = structuredClone(original.data); copy.title = `${copy.title.slice(0, 230)} (copy)`;
+          const created = createCampaign(db, user, copy);
+          return reply(details(user, created.id), 201);
+        }
         if (!operation && req.method === 'PUT') {
           saveCampaign(db, user, id, input.data, input.revision); return reply(details(user, id));
         }
@@ -171,7 +222,7 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
           const item = campaign.data.items.find(i => i.id === input.itemId);
           if (!item || !row) throw new InputError('Content or brand not found.', 404);
           item.variant++;
-          item.content = variation(JSON.parse(row.data), campaign.data.product, campaign.data.audience, item.variant);
+          item.content = variation(campaign.data.copyContext || JSON.parse(row.data), campaign.data.product, campaign.data.audience, item.variant);
           saveCampaign(db, user, id, campaign.data, input.revision); return reply(details(user, id));
         }
       }

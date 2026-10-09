@@ -27,7 +27,9 @@ export function validateBrand(input) {
     product: text(input.product, 'Product', 200),
     audience: text(input.audience, 'Audience', 400),
     tone: text(input.tone, 'Tone', 120),
-    website: website(text(input.website, 'Website', 1000)),
+    language: input.language === 'ar' ? 'ar' : 'en',
+    cta: typeof input.cta === 'string' ? input.cta.trim().slice(0, 200) : '',
+    website: input.website ? website(text(input.website, 'Website', 1000)) : '',
     claims: typeof input.claims === 'string' ? input.claims.trim().slice(0, 4000) : ''
   };
 }
@@ -36,8 +38,9 @@ export function validateBrand(input) {
 // Ambiguous values are surfaced as fields instead of silently inferred.
 export function parseRequest(message, brand, details = {}) {
   text(message, 'Campaign request', 4000);
-  const match = message.match(/(?:budget(?: of)?|with(?: a total budget of)?|for)\s+([\d][\d,. ]*)\s*(?:DKK|kr\.?)/i)
-    || message.match(/([\d][\d,. ]*)\s*DKK/i);
+  const normalizedMessage = message.replace(/[٠-٩]/g, digit => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit))).replaceAll('٬', ',').replaceAll('٫', '.');
+  const match = normalizedMessage.match(/(?:budget(?: of)?|with(?: a total budget of)?|for)\s+([\d][\d,. ]*)\s*(?:DKK|kr\.?)/i)
+    || normalizedMessage.match(/([\d][\d,. ]*)\s*(?:DKK|كرونة|كرونه|كرون)/i);
   let budget;
   if (match) {
     const raw = match[1].trim().replaceAll(' ', '');
@@ -46,9 +49,13 @@ export function parseRequest(message, brand, details = {}) {
       ? raw.replace(/[,.]/g, '') : raw.replace(',', '.');
     budget = Number(normalized);
   }
-  const period = message.match(/(?:for|over)\s+(\d+|one|two|three|four)\s+(day|week)s?/i);
+  const period = normalizedMessage.match(/(?:for|over)\s+(\d+|one|two|three|four)\s+(day|week)s?/i);
   const words = { one: 1, two: 2, three: 3, four: 4 };
-  const days = period ? (words[period[1].toLowerCase()] || Number(period[1])) * (period[2].toLowerCase() === 'week' ? 7 : 1) : undefined;
+  const arabicPeriod = normalizedMessage.match(/لمدة\s+(\d+)\s*(يوم|أيام|ايام|أسبوع|اسبوع|أسابيع|اسابيع)/);
+  const days = period ? (words[period[1].toLowerCase()] || Number(period[1])) * (period[2].toLowerCase() === 'week' ? 7 : 1)
+    : arabicPeriod ? Number(arabicPeriod[1]) * (/سبوع|سابيع/.test(arabicPeriod[2]) ? 7 : 1)
+    : /(?:لمدة\s+|ل)(?:أسبوعين|اسبوعين)/.test(normalizedMessage) ? 14
+    : /لمدة\s+(?:أسبوع|اسبوع)(?:\s+واحد)?/.test(normalizedMessage) ? 7 : undefined;
   const product = message.match(/(?:promote|advertise|market)\s+(.+?)(?:\s+to\s+|\s+for\s+|[.!]|$)/i)?.[1]?.replace(/^my\s+/i, '');
   const audience = message.match(/\s+to\s+(.+?)(?:\s+for\s+|\s+with\s+|[.!]|$)/i)?.[1];
   const values = { product: product || brand.product, audience: audience || brand.audience, budget, days, ...details };
@@ -65,20 +72,34 @@ export function parseRequest(message, brand, details = {}) {
 
 export function variation(brand, product, audience, variant = 0) {
   const facts = brand.claims ? `\n${brand.claims.split('\n').filter(Boolean)[0]}` : '';
+  if (brand.language === 'ar' || /[\u0600-\u06ff]/.test(product)) {
+    const ending = brand.cta ? `${brand.cta}${brand.website ? `\n${brand.website}` : ''}` : brand.website ? `اعرف التفاصيل: ${brand.website}` : 'تواصل معنا لمعرفة التفاصيل.';
+    const versions = [
+      `${product} من ${brand.name}.\nلـ${audience}.${facts}\n${ending}`,
+      `مهتم بـ${product}؟\nتعرّف على عرض ${brand.name} المناسب لـ${audience}.${facts}\n${ending}`,
+      `اطّلع على ${product}.\nإليك عرض ${brand.name} لـ${audience}.${facts}\n${ending}`
+    ];
+    return versions[variant % 3];
+  }
   const versions = [
-    `${product} from ${brand.name}.\nFor ${audience}.${facts}\nExplore the details: ${brand.website}`,
-    `Looking into ${product}?\n${brand.name} invites ${audience} to learn more.${facts}\n${brand.website}`,
-    `Discover ${product}.\nSee the offer from ${brand.name} for ${audience}.${facts}\nLearn more: ${brand.website}`
+    `${product} from ${brand.name}.\nFor ${audience}.${facts}\n${brand.cta ? `${brand.cta}${brand.website ? `\n${brand.website}` : ''}` : brand.website ? `Explore the details: ${brand.website}` : 'Contact us for details.'}`,
+    `Looking into ${product}?\n${brand.name} invites ${audience} to learn more.${facts}\n${brand.cta ? `${brand.cta}${brand.website ? `\n${brand.website}` : ''}` : brand.website || 'Contact us for details.'}`,
+    `Discover ${product}.\nSee the offer from ${brand.name} for ${audience}.${facts}\n${brand.cta ? `${brand.cta}${brand.website ? `\n${brand.website}` : ''}` : brand.website ? `Learn more: ${brand.website}` : 'Contact us for details.'}`
   ];
   return versions[variant % versions.length];
 }
 
 export function plan(message, brand, values, now = Date.now()) {
+  const copyContext = { ...brand, product: values.product, audience: values.audience,
+    language: values.language === 'ar' ? 'ar' : values.language === 'en' ? 'en' : brand.language,
+    cta: typeof values.productCta === 'string' ? values.productCta : brand.cta,
+    claims: typeof values.productFacts === 'string' ? values.productFacts : brand.claims,
+    website: typeof values.productWebsite === 'string' ? values.productWebsite : brand.website };
   const budget = money(values.budget);
   const count = 3;
   const start = now + 60000;
   return {
-    title: `${values.product} · ${values.days} days`, request: message,
+    title: `${values.product} · ${values.days} days`, request: message, copyContext,
     product: values.product, audience: values.audience,
     objective: 'Introduce the product and invite visits to its details page.',
     tone: brand.tone, currency: 'DKK', budget, duration: values.days,
@@ -87,7 +108,7 @@ export function plan(message, brand, values, now = Date.now()) {
     note: 'Channel suggestions only. All execution goes to Demo workspace. No real ads or posts are published.',
     items: Array.from({ length: count }, (_, i) => ({
       id: randomUUID(), account: 'demo-workspace', channel: i === 0 ? 'Social post' : 'Paid social',
-      destination: brand.website, content: variation(brand, values.product, values.audience, i),
+      destination: copyContext.website, content: variation(copyContext, values.product, values.audience, i),
       variant: i, due: start + Math.round(i * (values.days - 1) / (count - 1)) * 86400000,
       cost: Math.floor(budget / count) + (i === count - 1 ? budget % count : 0)
     }))
@@ -108,7 +129,7 @@ export function validateCampaign(input) {
     if (!Number.isSafeInteger(item.due) || item.due < 0 || item.due > Date.now() + 366 * 86400000) throw new InputError('Choose a valid date within the next year.');
     if (!Number.isSafeInteger(item.cost) || item.cost < 0 || item.cost > 100000000) throw new InputError('Invalid item budget.');
     return { id: item.id, account: item.account, channel: item.channel,
-      content: text(item.content, 'Content', 4000), destination: website(item.destination),
+      content: text(item.content, 'Content', 4000), destination: item.destination ? website(item.destination) : '',
       due: item.due, cost: item.cost, variant: Number.isInteger(item.variant) && item.variant >= 0 ? item.variant % 3 : 0 };
   });
   if (items.reduce((sum, item) => sum + item.cost, 0) > budget) throw new InputError('Item allocations exceed the campaign budget.');
@@ -117,6 +138,7 @@ export function validateCampaign(input) {
     product: text(input.product, 'Product', 200), audience: text(input.audience, 'Audience', 400),
     objective: text(input.objective, 'Objective', 1000), tone: text(input.tone, 'Tone', 120),
     currency: 'DKK', budget, duration: input.duration, generator: 'demo-templates', integration: 'demo',
+    ...(input.copyContext ? { copyContext: validateBrand(input.copyContext) } : {}),
     campaignType: 'product-promotion', suggestedChannels: ['Social post', 'Paid social'],
     note: 'Demo only. No real publishing or spending.', items
   };

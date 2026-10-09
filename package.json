@@ -9,6 +9,6 @@
     "worker": "node --env-file-if-exists=.env src/worker.js",
     "build:pages": "node tools/build-pages.mjs",
     "test": "node --test",
-    "check": "node --check src/server.js && node --check src/engine.js && node --check src/planner.js && node --check public/app.js && node --check public/pages-demo.js && node --check tools/build-pages.mjs"
+    "check": "node --check src/server.js && node --check src/engine.js && node --check src/planner.js && node --check public/app.js && node --check public/pages-demo.js && node --check public/marketing-tools.js && node --check public/workspace-ui.js && node --check tools/build-pages.mjs"
   }
 }

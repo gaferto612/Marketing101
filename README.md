@@ -2,6 +2,29 @@
 
 A personal campaign companion: describe a promotion, edit its plan and content, review the exact campaign, and run it through a clearly labeled demo integration.
 
+## Free marketing workspace
+
+All of these tools run without paid APIs, AI subscriptions, marketing-account connections, or a required product website. The Pages version stores its records in this browser; the Node version stores them per authenticated account in SQLite.
+
+| Area | Available now |
+| --- | --- |
+| Products | Product descriptions, audiences, actual offers, approved facts, calls to action, optional URLs, and brand colors |
+| Content studio | Six local template formats: social post, ad copy, short video script, email, message, and landing-page copy; Arabic/English frames; awareness, launch, enquiries, or offer objectives; clear, friendly, or concise style |
+| Saved drafts | Edit, copy, delete, mark ready, export CSV/text, and reuse a social/ad draft as the first piece in a campaign |
+| Ad designer | Edit headline, supporting text, button, and color; download square 1080×1080, portrait 1080×1920, or landscape 1200×628 PNG graphics |
+| Campaigns | Select a saved product, preserve its approved facts/link as a copy snapshot, export the saved campaign as CSV, or duplicate it as an unapproved draft |
+| Calendar | Browse scheduled content by month and export `.ics` preparation reminders in UTC |
+| Results | Log actual spend, impressions, clicks, leads, sales, and revenue manually; display CTR, cost per lead, and ROAS from paired measurements; export CSV |
+| Backup & exports | Download brand/workspace/campaign-plan JSON, validate a backup before confirmation, and restore it with automatic mode disabled and all campaign plans unapproved |
+
+Start with **Brand profile**, add a product under **Products**, then use **Content studio**. Save the kit, edit or mark drafts ready, and select **Use in campaign** on a saved social/ad draft. Other formats are preparation assets you export or use manually; they are not emailed, messaged, or published by this app. Your saved draft becomes the first campaign piece; review the remaining pieces separately. Campaign pieces are limited to 4,000 characters, while studio drafts allow 8,000.
+
+Templates use your supplied information and do not research, fact-check, or translate product facts. Arabic/English changes the template framing; source descriptions and facts retain the language you entered. Local quality checks flag some absolute claims, placeholder text, or long content; these checks are advisory, not proof that a claim is valid. The designer makes simple text graphics, not AI photos. Generated kits should be reviewed before use. Links are optional; a contact call to action is used when no link is present. Simple Arabic campaign durations and Arabic digits for DKK/كرونة amounts are supported, with explicit follow-up fields for unrecognized values.
+
+Manual **Results** are separate from simulated receipts. Missing measurements stay null; ratios use only reports containing both required measurements. Do not enter overlapping reports if you want totals to represent distinct periods. All monetary reports currently use DKK. Browser policy limits remain simulations, not a billing or security system.
+
+Workspace limits: 250 products, drafts, and manual reports per collection, and at most 2 MB of workspace JSON. Backup imports allow up to 3 MB and 250 campaign plans. Export and reduce old records when approaching limits. Backups contain plain marketing data, are not encrypted, and omit simulated jobs, receipts, and automation permission. Restoration replaces only your browser workspace or authenticated account's records; the Node version assigns new campaign IDs to avoid collisions. Every restored or duplicated campaign requires fresh review and approval. Workspace revision checks reject stale saves from other tabs. Existing Pages data migrates to the new workspace without discarding its campaigns.
+
 ## GitHub Pages browser demo
 
 Open **https://gaferto612.github.io/Marketing101/** for the static browser demo. The Pages workflow builds an explicit allowlist of public assets into `.pages-dist/` and deploys it through GitHub Actions. Pages settings use **GitHub Actions** as the publishing source; leave **Custom domain** blank to use the default project URL. The deployment runs only from `main`, whose pull-request and CI protections remain enabled.
@@ -54,7 +77,7 @@ Open **http://127.0.0.1:3101**. Create an account with a password of at least 12
 
 ## Deliberate first-release limits
 
-The **demo template planner is not an AI model**. It extracts simple English product/audience phrases, DKK amounts, and durations expressed as numbers or one/two/three/four days or weeks. Unrecognized budget or duration values prompt for explicit fields. Product/audience extraction is heuristic: inspect and revise the request if the brief is wrong. It generates three variations using supplied product details and the first approved claim. Tone is saved in the brief but the templates do not reliably adapt style. It does not browse websites, import their contents, generate images, or invent testimonials or product outcomes.
+The **demo template planner is not an AI model**. It extracts simple English product/audience phrases, DKK amounts, and durations expressed as numbers or one/two/three/four days or weeks, plus simple Arabic durations and amounts. Unrecognized budget or duration values prompt for explicit fields. Product/audience extraction is heuristic: inspect and revise the request if the brief is wrong, or select a saved product. It generates three campaign variations using supplied product details and the first approved claim. Tone is saved in the campaign brief but these campaign templates do not reliably adapt style; the separate studio provides three simple style options. It does not browse websites, import their contents, create AI images, or invent testimonials or product outcomes.
 
 The **demo integration never publishes to a real account or charges money**. Reach, clicks, and conversions remain unavailable, rather than displaying fabricated metrics. Social and paid-social channel suggestions are advisory. Accounts, currency (DKK), and campaign type are intentionally limited. Automatic adjustments are explicitly set to “none.” Cancellation retains completed receipts; it cannot undo already delivered activity. Budget failures stop the campaign instead of silently rescheduling or increasing limits.
 

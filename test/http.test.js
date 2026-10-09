@@ -4,6 +4,7 @@ import { once } from 'node:events';
 import { openDatabase } from '../src/db.js';
 import { createApp } from '../src/server.js';
 import { runDue } from '../src/engine.js';
+import { freshWorkspace } from '../public/marketing-tools.js';
 
 test('authenticated HTTP journey, access controls, CSRF and exact approval', async t => {
   const db = openDatabase(':memory:');
@@ -54,6 +55,30 @@ test('authenticated HTTP journey, access controls, CSRF and exact approval', asy
   assert.equal(done.data.metrics.clicks, null);
   assert.ok(done.data.events.some(e => e.message.includes('completed')));
   assert.match(done.headers.get('content-security-policy'), /script-src 'self'/);
+  const duplicate = await a(`/api/campaigns/${c.id}/duplicate`, 'POST', { revision: 2 });
+  assert.equal(duplicate.status, 201); assert.equal(duplicate.data.status, 'draft');
+  assert.equal(duplicate.data.jobs.length, 0); assert.equal(duplicate.data.receipts.length, 0);
+  assert.equal(duplicate.data.approved_revision, null);
+  assert.equal((await b(`/api/campaigns/${c.id}/duplicate`, 'POST', { revision: 2 })).status, 404);
+  const product = { id: 'product-a', name: 'Course', description: 'Actual description', audience: 'Owners', website: '', offer: '', facts: '', cta: '', color: '#235a43' };
+  const workspace = { ...freshWorkspace(), products: [product] };
+  assert.equal((await a('/api/workspace', 'PUT', workspace)).data.revision, 1);
+  assert.equal((await a('/api/workspace', 'PUT', workspace)).status, 409);
+  assert.equal((await b('/api/workspace')).data.products.length, 0);
+  await b('/api/workspace', 'PUT', { ...freshWorkspace(), products: [{ ...product, id: 'product-b', name: 'Other account product' }] });
+  await b('/api/brand', 'PUT', brand);
+  const otherCampaign = (await b('/api/plan', 'POST', { message: 'Promote my course for one week with 0 DKK' })).data.campaign;
+  const backup = { format: 'marketing101-backup', version: 1, brand, workspace, campaigns: [{ id: c.id, data: done.data.data }] };
+  const badBackup = { ...backup, workspace: { ...workspace, products: [{ ...product, website: 'javascript:alert(1)' }] } };
+  assert.equal((await a('/api/restore', 'POST', badBackup)).status, 400);
+  assert.equal((await a(`/api/campaigns/${c.id}`)).status, 200);
+  assert.equal((await a('/api/validate-backup', 'POST', backup)).data.campaigns, 1);
+  assert.equal((await a('/api/restore', 'POST', backup)).status, 200);
+  const restored = (await a('/api/campaigns')).data;
+  assert.equal(restored.length, 1); assert.equal(restored[0].status, 'draft'); assert.notEqual(restored[0].id, c.id);
+  assert.equal((await a(`/api/campaigns/${restored[0].id}`)).data.jobs.length, 0);
+  assert.equal((await b(`/api/campaigns/${otherCampaign.id}`)).status, 200);
+  assert.equal((await b('/api/workspace')).data.products[0].name, 'Other account product');
   assert.equal((await a('/api/logout', 'POST', {})).status, 200);
   assert.equal((await a('/api/me')).status, 401);
   assert.equal((await a('/api/login', 'POST', { email: 'a@example.com', password: 'incorrect long password' })).status, 401);

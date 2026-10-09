@@ -21,6 +21,9 @@ export function openDatabase(path = process.env.DATABASE_PATH || './data/marketi
     CREATE TABLE IF NOT EXISTS policies (
       user_id TEXT PRIMARY KEY REFERENCES users(id), data TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS workspaces (
+      user_id TEXT PRIMARY KEY REFERENCES users(id), data TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS campaigns (
       id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
       status TEXT NOT NULL DEFAULT 'draft', data TEXT NOT NULL,
