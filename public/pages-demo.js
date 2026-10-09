@@ -1,8 +1,9 @@
 import { InputError, parseRequest, plan, validateBrand, validateCampaign, money, variation } from './planner-browser.js';
+import { freshWorkspace, validateWorkspace, normalizeBackup } from './marketing-tools.js';
 
 const key = 'marketing101.pages.demo.v1';
 const defaults = () => ({ version: 1, brand: null,
-  policy: { enabled: false, accounts: [], campaignTypes: [], maxCampaign: 0, maxDaily: 0, adjustments: [] }, campaigns: [] });
+  policy: { enabled: false, accounts: [], campaignTypes: [], maxCampaign: 0, maxDaily: 0, adjustments: [] }, campaigns: [], workspace: freshWorkspace() });
 const clone = value => structuredClone(value);
 const allowed = (c, p) => p.enabled && c.data.budget <= p.maxCampaign
   && p.campaignTypes.includes(c.data.campaignType) && c.data.items.every(i => p.accounts.includes(i.account));
@@ -17,6 +18,7 @@ export function createBrowserDemo(storage, clock = Date.now) {
       if (!raw) return defaults();
       const data = JSON.parse(raw);
       if (data.version !== 1 || !Array.isArray(data.campaigns)) throw new Error();
+      data.workspace ||= freshWorkspace();
       return data;
     } catch { throw new Error('Saved demo data could not be read. Use Reset demo or allow browser storage.'); }
   }
@@ -65,6 +67,24 @@ export function createBrowserDemo(storage, clock = Date.now) {
     if (method === 'GET') tick(store, now);
     let result;
     if (path === '/me') result = { email: 'Local browser demo · no account', csrf: 'browser-demo' };
+    else if (path === '/workspace' && method === 'GET') result = store.workspace;
+    else if (path === '/workspace' && method === 'PUT') {
+      if (input.revision !== store.workspace.revision) throw new InputError('Workspace changed in another tab. Refresh before saving.', 409);
+      result = validateWorkspace(input); result.revision = store.workspace.revision + 1; store.workspace = result;
+    }
+    else if (['/restore', '/validate-backup'].includes(path) && method === 'POST') {
+      const backup = normalizeBackup(input, validateBrand, validateCampaign);
+      if (path === '/validate-backup') return { products: backup.workspace.products.length, drafts: backup.workspace.drafts.length, campaigns: backup.campaigns.length, reports: backup.workspace.results.length };
+      const oldRevisions = new Map(store.campaigns.map(c => [c.id, c.revision]));
+      const workspaceRevision = store.workspace.revision + 1;
+      store.brand = backup.brand; store.workspace = backup.workspace; store.workspace.revision = workspaceRevision;
+      store.policy = defaults().policy;
+      store.campaigns = backup.campaigns.map(c => ({ ...c, status: 'draft', revision: (oldRevisions.get(c.id) || 0) + 1, approved_revision: null,
+        approval_kind: null, cap: null, spent: 0, created: now, jobs: [], receipts: [],
+        events: [{ at: now, message: 'Restored from backup as an unapproved draft. Automatic mode disabled.' }],
+        metrics: { mode: 'demo', reach: null, clicks: null, conversions: null } }));
+      result = { ok: true, campaigns: store.campaigns.length };
+    }
     else if (path === '/brand' && method === 'GET') result = store.brand;
     else if (path === '/brand' && method === 'PUT') result = store.brand = validateBrand(input);
     else if (path === '/policy' && method === 'GET') result = store.policy;
@@ -89,19 +109,26 @@ export function createBrowserDemo(storage, clock = Date.now) {
         store.campaigns.unshift(c); result = { missing: [], campaign: c };
       }
     } else {
-      const match = path.match(/^\/campaigns\/([a-f0-9-]+)(?:\/(action|regenerate))?$/);
+      const match = path.match(/^\/campaigns\/([a-f0-9-]+)(?:\/(action|regenerate|duplicate))?$/);
       const c = match && store.campaigns.find(c => c.id === match[1]);
       if (!c) throw new InputError('Campaign not found.', 404);
       const operation = match[2];
       if (!operation && method === 'GET') result = c;
       else {
         if (input.revision !== c.revision) throw new InputError('Campaign changed. Refresh before continuing.', 409);
-        if ((!operation && method === 'PUT') || (operation === 'regenerate' && method === 'POST')) {
+        if (operation === 'duplicate' && method === 'POST') {
+          const copy = { ...clone(c), id: crypto.randomUUID(), status: 'draft', revision: 1,
+            approved_revision: null, approval_kind: null, cap: null, spent: 0, created: now, jobs: [], receipts: [], events: [] };
+          copy.data.title = `${copy.data.title.slice(0, 230)} (copy)`;
+          copy.data = validateCampaign(copy.data);
+          log(copy, 'Duplicated as an unapproved draft. Check dates before scheduling.', now);
+          store.campaigns.unshift(copy); save(store); return clone(copy);
+        } else if ((!operation && method === 'PUT') || (operation === 'regenerate' && method === 'POST')) {
           if (!['draft', 'awaiting approval'].includes(c.status)) throw new InputError('Only unapproved campaigns can be edited.', 409);
           if (operation === 'regenerate') {
             const item = c.data.items.find(i => i.id === input.itemId);
             if (!item) throw new InputError('Content not found.');
-            item.variant++; item.content = variation(store.brand, c.data.product, c.data.audience, item.variant);
+            item.variant++; item.content = variation(c.data.copyContext || store.brand, c.data.product, c.data.audience, item.variant);
           } else c.data = validateCampaign(input.data);
           c.revision++; c.status = 'draft'; c.approved_revision = null; c.cap = null; c.approval_kind = null;
           log(c, 'Saved changes. Previous review invalidated.', now);
