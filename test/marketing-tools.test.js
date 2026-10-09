@@ -53,6 +53,7 @@ test('optional product link and selected product facts survive campaign snapshot
   const backup = normalizeBackup({ format: 'marketing101-backup', version: 1, brand: b, workspace: { ...freshWorkspace(), products: [product] }, campaigns: [{ id: 'c1', data }] }, validateBrand, validateCampaign);
   assert.equal(backup.workspace.products.length, 1); assert.equal(backup.campaigns.length, 1);
   assert.throws(() => normalizeBackup({ version: 99 }, validateBrand, validateCampaign), /Unsupported/);
+  assert.throws(() => normalizeBackup({ format: 'marketing101-backup', version: 1, brand: b, campaigns: [{ id: 'invalid-id', data }] }, validateBrand, validateCampaign), /campaign ID/);
 });
 test('Arabic campaign requests understand Arabic digits and a two-week campaign without links', () => {
   const result = parseRequest('روّج لدورتي لمدة أسبوعين بميزانية ١٬٠٠٠ كرونة', validateBrand(brand));

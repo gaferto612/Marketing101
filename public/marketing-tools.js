@@ -121,6 +121,7 @@ export function normalizeBackup(input, validateBrand, validateCampaign) {
   const seen = new Set();
   const campaigns = input.campaigns.map(c => {
     const campaignId = id(c.id); if (seen.has(campaignId)) error('Duplicate campaign IDs.'); seen.add(campaignId);
+    if (!/^[a-f0-9-]{1,80}$/.test(campaignId)) error('Invalid campaign ID in backup.');
     return { id: campaignId, data: validateCampaign(c.data) };
   });
   return { workspace, brand: input.brand ? validateBrand(input.brand) : null, campaigns };
