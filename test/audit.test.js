@@ -61,5 +61,7 @@ test('report filtering scopes ratios to the chosen campaign/date and exposes mis
   const selected = filterResults(rows, { campaignId: 'c1', from: '2026-10-01', to: '2026-10-01' });
   assert.equal(metrics(selected).cpl, 25); assert.equal(metrics(selected).roas, 3);
   assert.deepEqual(metricsCoverage(rows), { total: 2, ctr: 1, cpl: 2, roas: 1 });
+  assert.equal(metrics([{ spend: 100 }]).sales, null);
+  assert.deepEqual(metricsCoverage([{ spend: 100 }]), { total: 1, ctr: 0, cpl: 0, roas: 0 });
   assert.throws(() => filterResults(rows, { from: '2026-10-03', to: '2026-10-01' }), /Start date/);
 });

@@ -95,7 +95,7 @@ export function filterResults(rows, { campaignId = '', from = '', to = '' } = {}
   return rows.filter(r => (!campaignId || (campaignId === 'unassigned' ? !r.campaignId : r.campaignId === campaignId)) && (!from || r.date >= from) && (!to || r.date <= to));
 }
 export function metricsCoverage(rows) {
-  const pair = (a, b) => rows.filter(r => r[a] !== null && r[b] !== null).length;
+  const pair = (a, b) => rows.filter(r => r[a] !== null && r[a] !== undefined && r[b] !== null && r[b] !== undefined).length;
   return { total: rows.length, ctr: pair('clicks', 'impressions'), cpl: pair('spend', 'leads'), roas: pair('revenue', 'spend') };
 }
 
@@ -142,9 +142,10 @@ export function qualityChecks(content, language = 'en') {
   return checks;
 }
 export function metrics(rows) {
-  const total = field => rows.some(r => r[field] !== null) ? rows.reduce((n, r) => n + (r[field] ?? 0), 0) : null;
+  const present = value => value !== null && value !== undefined;
+  const total = field => rows.some(r => present(r[field])) ? rows.reduce((n, r) => n + (r[field] ?? 0), 0) : null;
   // Ratios use only rows with both measurements, never treat missing values as zero.
-  const ratio = (num, den, factor = 1) => { const pairs = rows.filter(r => r[num] !== null && r[den] !== null); const base = pairs.reduce((n, r) => n + r[den], 0); return base > 0 ? pairs.reduce((n, r) => n + r[num], 0) / base * factor : null; };
+  const ratio = (num, den, factor = 1) => { const pairs = rows.filter(r => present(r[num]) && present(r[den])); const base = pairs.reduce((n, r) => n + r[den], 0); return base > 0 ? pairs.reduce((n, r) => n + r[num], 0) / base * factor : null; };
   return { spend: total('spend'), impressions: total('impressions'), clicks: total('clicks'), leads: total('leads'), sales: total('sales'), revenue: total('revenue'),
     ctr: ratio('clicks', 'impressions', 100), cpl: ratio('spend', 'leads'), roas: ratio('revenue', 'spend') };
 }
