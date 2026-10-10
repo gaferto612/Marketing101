@@ -48,6 +48,7 @@ test('launch readiness is human confirmation and campaign pieces have distinct p
   assert.match(copy[0], /utm_content=problem/); assert.match(copy[1], /utm_content=evidence/); assert.match(copy[2], /utm_content=offer/);
   assert.throws(() => validateLaunch({ ...launch, timezone: 'Invalid/Zone' }), /timezone/);
   assert.throws(() => validateLaunch({ ...launch, target: 0 }), /target/);
+  assert.equal(validateLaunch({ ...launch, budget: 10.25 }).budget, 10.25);
   assert.throws(() => validateLaunch({ ...launch, contentPieces: ['only one'] }), /three/);
   const custom = { ...launch, contentPieces: ['A', 'B', 'C'] }; assert.deepEqual(launchPieces(project('a'), custom), ['A', 'B', 'C']);
 });

@@ -7,7 +7,7 @@ export function createLaunchUI({ api, state, esc, toast, navigate, openCampaign,
   let step = 0, draft = {}, editingProject = '', editingFollowup = '';
   const project = () => state.registry.projects.find(p => p.id === state.projectId);
   const options = (items, selected) => Object.entries(items).map(([key, label]) => `<option value="${esc(key)}" ${key === selected ? 'selected' : ''}>${esc(label)}</option>`).join('');
-  const field = (key, label, value = '', required = false, type = 'text', max = 600) => `<label>${label}<input name="${key}" value="${esc(value)}" type="${type}" ${required ? 'required' : ''} maxlength="${max}"></label>`;
+  const field = (key, label, value = '', required = false, type = 'text', max = 600) => `<label>${label}<input name="${key}" value="${esc(value)}" type="${type}" ${type === 'number' ? `step="${key === 'budget' ? '0.01' : '1'}" min="${key === 'budget' ? '0' : '1'}"` : ''} ${required ? 'required' : ''} maxlength="${max}"></label>`;
   const area = (key, label, value = '', required = false, max = 2000) => `<label class="span-2">${label}<textarea name="${key}" aria-label="${label}" maxlength="${max}" ${required ? 'required' : ''} dir="auto">${esc(value)}</textarea></label>`;
   const check = (key, label, value) => `<label class="check-label"><input name="${key}" type="checkbox" ${value ? 'checked' : ''}>${label}</label>`;
   const heading = (title, text) => `<div class="page-heading" dir="rtl" lang="ar"><div><h1>${title}</h1><p>${text}</p></div></div>`;

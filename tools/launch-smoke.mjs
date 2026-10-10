@@ -29,6 +29,7 @@ try {
   await fill('المدن أو مناطق توفر الخدمة', 'دمشق — تجربة افتراضية'); await fill('سؤال أو مشكلة الجمهور', 'كيف ننظم المواعيد؟');
   await page.getByRole('button', { name: 'التالي', exact: true }).click();
   await fill('خطوة التواصل أو التسجيل', 'اطلب تفاصيل التجربة'); await fill('متى نعتبر النتيجة نجاحاً؟', 'استفسار من عيادة عن تجربة الخدمة');
+  assert.equal(await page.getByLabel('ميزانية الخطة (DKK)', { exact: true }).getAttribute('step'), '0.01');
   await page.getByRole('button', { name: 'التالي', exact: true }).click();
   await fill('المسؤول عن متابعة الاستفسارات', 'مسؤول التجربة');
   await page.getByLabel('الخدمة متاحة فعلياً لهذا الجمهور والمنطقة', { exact: true }).check();
