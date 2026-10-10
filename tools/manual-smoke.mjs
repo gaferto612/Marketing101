@@ -11,7 +11,7 @@ try {
   await page.goto(origin);
   await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'دليل الاستخدام / User manual', exact: true }).click();
   await page.getByRole('heading', { name: 'دليل الاستخدام', exact: true }).waitFor();
-  assert.equal(await page.locator('.user-manual section').count(), 14);
+  assert.equal(await page.locator('.user-manual section').count(), 18);
   await page.getByRole('link', { name: 'Results — قياس النتائج الفعلية', exact: true }).click();
   assert.ok(await page.locator('#manual-results').isVisible());
   await page.screenshot({ path: 'test-results/manual-desktop.png', fullPage: true });
@@ -29,5 +29,5 @@ try {
   await page.emulateMedia({ media: 'print' });
   assert.equal(await page.getByRole('button', { name: 'طباعة / حفظ PDF', exact: true }).isVisible(), false);
   assert.deepEqual(errors, []);
-  console.log('Manual passed: desktop/mobile navigation, 14 sections, anchor targets, RTL standalone page, print controls, no overflow or page errors.');
+  console.log('Manual passed: desktop/mobile navigation, 18 sections, anchor targets, RTL standalone page, print controls, no overflow or page errors.');
 } finally { await browser.close(); }

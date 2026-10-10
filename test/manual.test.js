@@ -9,7 +9,7 @@ import { sections, reviewedOn } from '../public/user-manual.js';
 test('guide review matches current app and covers every workflow without promising live delivery', () => {
   execFileSync(process.execPath, ['tools/check-manual.mjs']);
   assert.match(reviewedOn, /^\d{4}-\d{2}-\d{2}$/);
-  const expected = ['start', 'modes', 'brand', 'products', 'strategy', 'studio', 'composer', 'approval', 'states', 'automation', 'creative', 'results', 'backup', 'help'];
+  const expected = ['projects', 'launch', 'followup', 'tracking', 'start', 'modes', 'brand', 'products', 'strategy', 'studio', 'composer', 'approval', 'states', 'automation', 'creative', 'results', 'backup', 'help'];
   assert.deepEqual(sections.map(s => s.id), expected);
   for (const section of sections) assert.ok(section.title && section.text && section.steps.length);
   assert.match(sections.find(s => s.id === 'modes').text, /لا نشر حقيقي/);

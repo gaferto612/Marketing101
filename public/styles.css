@@ -27,3 +27,6 @@
   .user-manual .card { box-shadow: none; border: 0; padding: 0; }
   .user-manual h2 { break-after: avoid; }
 }
+.launch-wizard textarea { min-height: 120px; }
+.launch-wizard .check-label { margin-block: 16px; }
+#project-context { padding-inline: 12px; overflow-wrap: anywhere; }

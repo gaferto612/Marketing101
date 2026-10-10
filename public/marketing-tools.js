@@ -1,4 +1,5 @@
 // Pure offline tools, shared by the browser workspace and server validation.
+import { validateProject, validateLaunch, validateFollowup } from './launch-tools.js';
 export const formats = {
   social: 'Social post', ad: 'Ad copy', video: 'Short video script',
   email: 'Email draft', message: 'Message draft', landing: 'Landing page copy'
@@ -6,7 +7,7 @@ export const formats = {
 export const objectives = { awareness: 'Awareness', launch: 'Product launch', leads: 'Enquiries', offer: 'Promote an offer' };
 export const funnelStages = { awareness: 'Discover', consideration: 'Evaluate', action: 'Take action' };
 export const goalMetrics = { impressions: 'Impressions', clicks: 'Clicks', leads: 'Leads', sales: 'Sales', revenue: 'Revenue (DKK)' };
-export const freshWorkspace = () => ({ version: 1, revision: 0, products: [], drafts: [], results: [], briefs: [] });
+export const freshWorkspace = () => ({ version: 1, revision: 0, products: [], drafts: [], results: [], briefs: [], projects: [], launches: [], followups: [] });
 const error = message => { throw new Error(message); };
 const string = (value, label, max, required = false) => {
   if (typeof value !== 'string' || value.length > max || (required && !value.trim())) error(`${label}: enter ${required ? 'a value' : 'text'} within ${max} characters.`);
@@ -30,7 +31,7 @@ export function validateProduct(p) {
     revision: Number.isSafeInteger(p.revision) && p.revision > 0 ? p.revision : 1,
     website: optionalLink(p.website), color: /^#[a-f0-9]{6}$/i.test(p.color) ? p.color : '#235a43' };
 }
-export function validateWorkspace(input) {
+export function validateWorkspace(input, nested = false) {
   if (!input || input.version !== 1) error('Unsupported workspace format.');
   if (new TextEncoder().encode(JSON.stringify(input)).length > 2000000) error('Workspace is larger than 2 MB. Export and reduce older records before saving.');
   for (const key of ['products', 'drafts', 'results']) if (!Array.isArray(input[key]) || input[key].length > 250) error(`Workspace ${key} must contain at most 250 records.`);
@@ -50,7 +51,7 @@ export function validateWorkspace(input) {
   const results = unique(input.results.map(r => {
     const date = string(r.date, 'Result date', 10, true);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(new Date(date).getTime()) || new Date(date).toISOString().slice(0, 10) !== date) error('Enter a valid result date.');
-    const row = { id: id(r.id), date, label: string(r.label, 'Result label', 240, true),
+    const row = { id: id(r.id), date, label: string(r.label, 'Result label', 240, true), source: string(r.source || '', 'Result source', 120), success: string(r.success || '', 'Success definition', 600),
       campaignId: r.campaignId ? id(r.campaignId) : '', notes: string(r.notes || '', 'Notes', 2000) };
     for (const field of ['spend', 'impressions', 'clicks', 'leads', 'sales', 'revenue']) row[field] = amount(r[field]);
     for (const field of ['impressions', 'clicks', 'leads', 'sales']) if (row[field] !== null && !Number.isSafeInteger(row[field])) error('Counts must be whole numbers.');
@@ -60,7 +61,12 @@ export function validateWorkspace(input) {
   const rawBriefs = input.briefs ?? [];
   if (!Array.isArray(rawBriefs) || rawBriefs.length > 250) error('Workspace briefs must contain at most 250 records.');
   const briefs = unique(rawBriefs.map(b => { const brief = validateBrief(b); if (!productIds.has(brief.productId)) error('A brief refers to a missing product.'); return brief; }));
-  return { version: 1, revision: Number.isSafeInteger(input.revision) && input.revision >= 0 ? input.revision : 0, products, drafts, results, briefs };
+  for (const key of ['projects', 'launches', 'followups']) if (input[key] !== undefined && (!Array.isArray(input[key]) || input[key].length > 250)) error(`Workspace ${key} must contain at most 250 records.`);
+  if (nested && input.projects?.length) error('Projects cannot contain nested projects.');
+  const projects = unique((input.projects || []).map(p => ({ ...validateProject(p), workspace: validateWorkspace(p.workspace || freshWorkspace(), true) })));
+  const launches = unique((input.launches || []).map(validateLaunch));
+  const followups = unique((input.followups || []).map(f => validateFollowup(f, new Set(launches.map(l => l.id)))));
+  return { version: 1, revision: Number.isSafeInteger(input.revision) && input.revision >= 0 ? input.revision : 0, products, drafts, results, briefs, projects, launches, followups };
 }
 
 export function validateBrief(b) {
@@ -90,9 +96,9 @@ export function filterDrafts(drafts, { query = '', format = '', stage = '', lang
   const term = query.trim().toLocaleLowerCase();
   return drafts.filter(d => (!term || `${d.title} ${d.content}`.toLocaleLowerCase().includes(term)) && (!format || d.format === format) && (!stage || d.stage === stage) && (!language || d.language === language));
 }
-export function filterResults(rows, { campaignId = '', from = '', to = '' } = {}) {
+export function filterResults(rows, { campaignId = '', from = '', to = '', source = '' } = {}) {
   if (from && to && from > to) error('Start date must be before or equal to end date.');
-  return rows.filter(r => (!campaignId || (campaignId === 'unassigned' ? !r.campaignId : r.campaignId === campaignId)) && (!from || r.date >= from) && (!to || r.date <= to));
+  return rows.filter(r => (!campaignId || (campaignId === 'unassigned' ? !r.campaignId : r.campaignId === campaignId)) && (!from || r.date >= from) && (!to || r.date <= to) && (!source.trim() || (r.source || '').toLowerCase() === source.trim().toLowerCase()));
 }
 export function metricsCoverage(rows) {
   const pair = (a, b) => rows.filter(r => r[a] !== null && r[a] !== undefined && r[b] !== null && r[b] !== undefined).length;
@@ -182,5 +188,19 @@ export function normalizeBackup(input, validateBrand, validateCampaign) {
     if (!/^[a-f0-9-]{1,80}$/.test(campaignId)) error('Invalid campaign ID in backup.');
     return { id: campaignId, data: validateCampaign(c.data) };
   });
+  const projectIds = new Set(workspace.projects.map(p => p.id));
+  for (const c of campaigns) if (c.data.projectId && !projectIds.has(c.data.projectId)) error('Backup campaign refers to a missing project.');
+  for (const [projectId, partition] of [['', workspace], ...workspace.projects.map(p => [p.id, p.workspace])]) {
+    for (const row of [...partition.results, ...partition.launches]) {
+      const campaign = row.campaignId && campaigns.find(c => c.id === row.campaignId);
+      if (campaign && (campaign.data.projectId || '') !== projectId) error('Backup links records across projects.');
+    }
+  }
   return { workspace, brand: input.brand ? validateBrand(input.brand) : null, campaigns };
+}
+
+export function backupCounts(backup) {
+  const partitions = [backup.workspace, ...backup.workspace.projects.map(p => p.workspace)];
+  const count = key => partitions.reduce((total, workspace) => total + workspace[key].length, 0);
+  return { projects: backup.workspace.projects.length, products: count('products'), drafts: count('drafts'), reports: count('results'), launches: count('launches'), followups: count('followups'), campaigns: backup.campaigns.length };
 }

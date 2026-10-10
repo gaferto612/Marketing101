@@ -143,3 +143,15 @@ Open **دليل الاستخدام / User manual** in the workspace navigation (
 The shared guide source is `public/user-manual.js`. For each application change, update affected instructions and `reviewedOn`, then run `npm run manual:reviewed`. Commit the generated `docs/user-manual-review.json` with the change. `npm run manual:check` runs in required CI and Pages publishing and blocks unreviewed application changes. It checks file fingerprints, not instructional accuracy; review is still required. If instructions remain accurate after an internal change, record that conclusion in the PR. See `AGENTS.md` for the maintenance rule.
 
 Browser validation: run `node tools/manual-smoke.mjs` against the Pages preview, with `PLAYWRIGHT_MODULE` and `TEST_BROWSER_CHANNEL` configured if needed. `TEST_ORIGIN` can point it at the published site.
+
+## Project launch workspaces
+
+**المشاريع / Projects** creates separate project profiles and asset partitions. The original workspace retains legacy brand/products/content/reports/campaigns. Selecting a project scopes products, drafts, briefs, launch plans, reports, follow-ups and campaign lists. Server authentication still isolates accounts; project partitions organize one owner's data and do not add team permissions. Automation rules and daily limits remain account-wide.
+
+**أطلق مشروعك / Launch** provides four steps: market/audience, offer/goal/response path, human readiness checks, and editable content review. Its three pieces address relevance, evidence and the actual next step. Saving prepares an unapproved demo campaign. Repeating creation for the same launch/project returns the existing campaign. Follow-up is a manual operational log using aliases, ownership, dates and stages; it sends no messages and records no actual appointment. Do not store medical/patient data in this marketing tool.
+
+**مصادر النتائج / Tracking** generates UTM links; launch content includes distinct problem/evidence/offer tags. Actual measurement requires destination reports or manual attribution. Results supports source labels, source filtering and a written success definition. There is no built-in click collector. Country selection is planning context, not a verified channel availability database. Supported content languages are Arabic and English; budgets remain DKK. The market timezone is reference metadata; campaign schedule editing uses the device timezone.
+
+Full JSON backup/restore covers all projects and the original workspace. CSV/calendar exports are for the selected workspace. Restore disables automation and restores only unapproved campaign plans, remapping project report and launch references on the server. Imported backups reject cross-project campaign links. No private GitHub content is automatically imported or bundled in Pages.
+
+Validation: `node tools/launch-smoke.mjs` runs the real UI journey (set `TEST_SERVER=true` for an authenticated server). See `docs/LAUNCH_PLATFORM_VERIFICATION.md` for the tested scope and remaining integrations.
