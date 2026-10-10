@@ -1,0 +1,33 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE ? pathToFileURL(process.env.PLAYWRIGHT_MODULE).href : 'playwright');
+const browser = await chromium.launch({ headless: true, ...(process.env.TEST_BROWSER_CHANNEL ? { channel: process.env.TEST_BROWSER_CHANNEL } : {}) });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+const origin = process.env.TEST_ORIGIN || 'http://127.0.0.1:3102/Marketing101/';
+const errors = []; page.on('pageerror', error => errors.push(error.message));
+await mkdir('test-results', { recursive: true });
+try {
+  await page.goto(origin);
+  await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name: 'دليل الاستخدام / User manual', exact: true }).click();
+  await page.getByRole('heading', { name: 'دليل الاستخدام', exact: true }).waitFor();
+  assert.equal(await page.locator('.user-manual section').count(), 14);
+  await page.getByRole('link', { name: 'Results — قياس النتائج الفعلية', exact: true }).click();
+  assert.ok(await page.locator('#manual-results').isVisible());
+  await page.screenshot({ path: 'test-results/manual-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByLabel('Workspace navigation', { exact: true }).selectOption('dashboard');
+  await page.getByLabel('Workspace navigation', { exact: true }).selectOption('manual');
+  assert.ok(await page.getByRole('heading', { name: 'دليل الاستخدام', exact: true }).isVisible());
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await page.screenshot({ path: 'test-results/manual-mobile.png', fullPage: true });
+  await page.goto(new URL('manual.html', origin).href);
+  await page.getByRole('heading', { name: 'دليل الاستخدام', exact: true }).waitFor();
+  assert.equal(await page.locator('html').getAttribute('lang'), 'ar');
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  for (const link of await page.locator('.manual-toc a').all()) assert.equal(await page.locator(await link.getAttribute('href')).count(), 1);
+  await page.emulateMedia({ media: 'print' });
+  assert.equal(await page.getByRole('button', { name: 'طباعة / حفظ PDF', exact: true }).isVisible(), false);
+  assert.deepEqual(errors, []);
+  console.log('Manual passed: desktop/mobile navigation, 14 sections, anchor targets, RTL standalone page, print controls, no overflow or page errors.');
+} finally { await browser.close(); }

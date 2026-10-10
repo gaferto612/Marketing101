@@ -75,7 +75,7 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
       metrics: { mode: 'demo', reach: null, clicks: null, conversions: null }
     };
   }
-  const staticFiles = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/marketing-tools.js': ['marketing-tools.js', 'text/javascript'], '/workspace-ui.js': ['workspace-ui.js', 'text/javascript'], '/editor-state.js': ['editor-state.js', 'text/javascript'] };
+  const staticFiles = { '/': ['index.html', 'text/html'], '/manual.html': ['manual.html', 'text/html'], '/user-manual.js': ['user-manual.js', 'text/javascript'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/marketing-tools.js': ['marketing-tools.js', 'text/javascript'], '/workspace-ui.js': ['workspace-ui.js', 'text/javascript'], '/editor-state.js': ['editor-state.js', 'text/javascript'] };
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');

@@ -1,0 +1,20 @@
+{
+  "reviewed": {
+    "package.json": "cb6c0ee6960bcaa93a90fc4e6d3fd61efd7d0f75c3c51eb8bab37367c22b8120",
+    "public/app.js": "6fcc12231be53a3d17ed3707e9dc973fffc49c74dc43fdf050373754628be311",
+    "public/editor-state.js": "ed0ab366683c8e6a0e580296b325e98dc31f196ed25238e4c88e4af8bdc0bd7e",
+    "public/index.html": "5df7dce769272eb83d6bd1cc8a8f0334c0a5df17087e4b8d909c80f92987e4b5",
+    "public/manual.html": "5ddb185ecd8de6b49612007cc5868687484db79ed2f55244da618590f59b0ce3",
+    "public/marketing-tools.js": "180668394611b6dc20dc6faba57207fa1f8957d01d698a1b213c0d146b576f87",
+    "public/pages-demo.js": "ee1a6738254fb37d5f57b7e2dc24b932e380be7c597128bd0c265c719a3064eb",
+    "public/styles.css": "8bdd226c36982181ac0596f54eaf8a6957ce7126b3c73accba6e065d04c5c102",
+    "public/user-manual.js": "ffa2dca9ca2409ede77027d7462785b65105ab022cf8a4f7647db46fda4ebea1",
+    "public/workspace-ui.js": "240d23102cda75428aac41047944c60c6707b01a4355dc44aee588e2e428a64b",
+    "src/db.js": "936d87295080a36e2807c0df72160c734a3f94afc395defecf253631d8d6bf90",
+    "src/engine.js": "b88fd9779f82d5e4c8b854dec2d61af660208b42769a1c2a48beaa49d7e6682b",
+    "src/integrations.js": "e8820bfb90a1f5066a7914fc55b47e5caccdfd130e79a1161ce9233d50837ac5",
+    "src/planner.js": "f564b0ba155f374cbe3a91fe78131b1a07ec7164b567f0bab0bf7722d6f67f16",
+    "src/server.js": "0450410f3152be2e6c9542a1da7aa8e4672f65581f8beba40ec034a9d29fc7bc",
+    "src/worker.js": "2e2ac46b0a19f85f2f0014f721187ce1a0de8196730988483a1f6de8c28145ce"
+  }
+}

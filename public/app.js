@@ -1,6 +1,7 @@
 import { createWorkspaceUI } from './workspace-ui.js';
 import { freshWorkspace, briefObjective } from './marketing-tools.js';
 import { freezeForm } from './editor-state.js';
+import { renderManual } from './user-manual.js';
 const $ = selector => document.querySelector(selector);
 const browserDemo = document.querySelector('meta[name="marketing101-mode"]')?.content === 'browser-demo';
 let demoTransport;
@@ -98,7 +99,7 @@ function navigate(view) {
   state.dirty = false; state.view = view; render();
 }
 window.addEventListener('beforeunload', event => { if (state.dirty) { event.preventDefault(); event.returnValue = ''; } });
-const headings = { dashboard: 'Overview', composer: 'Create campaign', brand: 'Brand profile', automation: 'Automation', detail: 'Campaign', products: 'Products', strategy: 'Strategy', studio: 'Content studio', creative: 'Ad designer', calendar: 'Calendar', results: 'Results', data: 'Backup & exports' };
+const headings = { dashboard: 'Overview', composer: 'Create campaign', brand: 'Brand profile', automation: 'Automation', detail: 'Campaign', products: 'Products', strategy: 'Strategy', studio: 'Content studio', creative: 'Ad designer', calendar: 'Calendar', results: 'Results', data: 'Backup & exports', manual: 'دليل الاستخدام / User manual' };
 for (const [value, label] of Object.entries(headings)) if (value !== 'detail') { const option = document.createElement('option'); option.value = value; option.textContent = label; $('#mobile-view').append(option); }
 $('#mobile-view').addEventListener('change', event => navigate(event.target.value));
 function render() {
@@ -106,6 +107,7 @@ function render() {
   $('#breadcrumb').textContent = `Workspace / ${headings[state.view]}`;
   document.querySelectorAll('nav [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === state.view || (state.view === 'detail' && button.dataset.view === 'dashboard')));
   if (workspaceUI.views.includes(state.view)) workspaceUI.render(state.view);
+  else if (state.view === 'manual') renderManual($('#view'));
   else ({ dashboard, composer, brand: brandForm, automation, detail }[state.view] || dashboard)();
 }
 function dashboard() {
