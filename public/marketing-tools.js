@@ -120,12 +120,14 @@ export function generatePack(product, { language = 'ar', goal = 'awareness', ton
   }[goal][index];
   const intro = tone === 'friendly' ? (ar ? 'أهلاً! ' : 'Hello! ') : '';
   const details = tone === 'concise' ? facts.slice(0, 1).join('\n') : [p.description, factText].filter(Boolean).join('\n\n');
-  const context = p.problem ? (ar ? `هل تتساءل عن ${p.problem}؟` : `Exploring ${p.problem}?`) : '';
+  const context = p.problem ? (ar ? `سؤال قد يهمك: ${p.problem.replace(/[؟?]+$/u, '')}؟` : `A question to explore: ${p.problem.replace(/[?]+$/, '')}?`) : '';
   const questions = p.objections && goal === 'leads' ? (ar ? `أسئلتك حول ${p.objections} مرحّب بها.` : `Questions about ${p.objections} are welcome.`) : '';
-  const body = [intro + opening, ar ? `لـ${p.audience}.` : `For ${p.audience}.`, context, details, p.difference, questions, p.offer, cta + link].filter(Boolean).join('\n\n');
+  const audience = ar ? `الجمهور: ${p.audience}.` : `For ${p.audience}.`;
+  const body = [intro + opening, audience, context, details, p.difference, questions, p.offer, cta + link].filter(Boolean).join('\n\n');
+  const adBody = [context || audience, p.description, facts[0], p.difference, p.offer, cta + link].filter(Boolean).join('\n\n');
   const items = {
     social: body,
-    ad: `${ar ? 'العنوان' : 'Headline'}: ${opening}\n\n${ar ? 'النص' : 'Body'}:\n${body}`,
+    ad: `${ar ? 'العنوان' : 'Headline'}: ${opening}\n\n${ar ? 'النص' : 'Body'}:\n${adBody}`,
     video: ar ? `مسودة فيديو قصير — التوقيت تقريبي\n\n0–5 ثوانٍ: ${opening}\nالمشهد: بطاقة عنوان أو صورة المنتج التي تملكها.\n\n5–20 ثانية: ${details}\nالمشهد: شرح المنتج، بدون ادعاءات إضافية.\n\n20–30 ثانية: ${cta}${link}`
       : `Short video draft — approximate timing\n\n0–5 seconds: ${opening}\nVisual: title card or your own product image.\n\n5–20 seconds: ${details}\nVisual: explain the product without adding claims.\n\n20–30 seconds: ${cta}${link}`,
     email: `${ar ? 'الموضوع' : 'Subject'}: ${opening}\n\n${ar ? 'مرحباً،' : 'Hello,'}\n\n${body}\n\n${ar ? 'استخدمها فقط مع أشخاص وافقوا على استلام رسائلك.' : 'Use only with recipients who opted in to your messages.'}`,

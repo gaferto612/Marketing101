@@ -102,6 +102,7 @@ export function createWorkspaceUI({ api, state, esc, toast, navigate, openCampai
       if (state.dirty) { toast('Save brief edits before preparing a campaign.'); return; }
       const brief = briefs.find(b => b.id === button.dataset.useBrief), p = state.workspace.products.find(p => p.id === brief.productId);
       state.activeBrief = structuredClone(brief); state.selectedProduct = p.id; state.pendingDraft = null; state.pending = null;
+      studioOptions = { ...studioOptions, productId: p.id, goal: brief.goal };
       state.message = `Promote ${p.name} to ${p.audience} for ${brief.days} days, with a budget of ${brief.budget} DKK.`;
       navigate('composer');
     }));
@@ -170,8 +171,12 @@ export function createWorkspaceUI({ api, state, esc, toast, navigate, openCampai
       if (state.dirty) { toast('Save your content edits first.'); return; }
       const draft = state.workspace.drafts.find(d => d.id === b.dataset.useDraft);
       const product = state.workspace.products.find(p => p.id === draft.productId);
-      state.selectedProduct = product.id; state.pendingDraft = structuredClone(draft); state.activeBrief = null; state.pending = null;
-      state.message = `Promote ${product.name} to ${product.audience} for two weeks, with a budget of 0 DKK.`;
+      if (state.activeBrief && state.activeBrief.productId !== product.id) {
+        if (!confirm('This content belongs to another product. Replace the active strategy with a new campaign?')) return;
+        state.activeBrief = null;
+      }
+      state.selectedProduct = product.id; state.pendingDraft = structuredClone(draft); state.pending = null;
+      if (!state.activeBrief || !state.message) state.message = `Promote ${product.name} to ${product.audience} for ${state.activeBrief?.days ?? 14} days, with a budget of ${state.activeBrief?.budget ?? 0} DKK.`;
       navigate('composer');
     }));
   }

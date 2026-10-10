@@ -76,9 +76,9 @@ export function variation(brand, product, audience, variant = 0) {
   if (brand.language === 'ar' || /[\u0600-\u06ff]/.test(product)) {
     const ending = brand.cta ? `${brand.cta}${brand.website ? `\n${brand.website}` : ''}` : brand.website ? `اعرف التفاصيل: ${brand.website}` : 'تواصل معنا لمعرفة التفاصيل.';
     const versions = [
-      `${product} من ${brand.name}.\nلـ${audience}.${facts}\n${ending}`,
-      `مهتم بـ${product}؟\nتعرّف على عرض ${brand.name} المناسب لـ${audience}.${facts}\n${ending}`,
-      `اطّلع على ${product}.\nإليك عرض ${brand.name} لـ${audience}.${facts}\n${ending}`
+      `${product} من ${brand.name}.\nالجمهور: ${audience}.${facts}\n${ending}`,
+      `تعرّف على تفاصيل ${product}.\nالجمهور: ${audience}.${facts}\n${ending}`,
+      `اطّلع على عرض ${product}.\nالجمهور: ${audience}.${facts}\n${ending}`
     ];
     return versions[variant % 3];
   }
@@ -106,10 +106,10 @@ export function plan(message, brand, values, now = Date.now()) {
     objective: typeof values.goalObjective === 'string' ? values.goalObjective : 'Introduce the product and invite visits to its details page.',
     tone: brand.tone, currency: 'DKK', budget, duration: values.days,
     generator: 'demo-templates', integration: 'demo', campaignType: 'product-promotion',
-    suggestedChannels: ['Social post', 'Paid social'],
+    suggestedChannels: budget === 0 ? ['Social post'] : ['Social post', 'Paid social'],
     note: 'Channel suggestions only. All execution goes to Demo workspace. No real ads or posts are published.',
     items: Array.from({ length: count }, (_, i) => ({
-      id: randomUUID(), account: 'demo-workspace', channel: i === 0 ? 'Social post' : 'Paid social',
+      id: randomUUID(), account: 'demo-workspace', channel: budget === 0 || i === 0 ? 'Social post' : 'Paid social',
       destination: copyContext.website, content: variation(copyContext, values.product, values.audience, i),
       variant: i, due: start + Math.round(i * (values.days - 1) / (count - 1)) * 86400000,
       cost: Math.floor(budget / count) + (i === count - 1 ? budget % count : 0)
@@ -142,7 +142,7 @@ export function validateCampaign(input) {
     currency: 'DKK', budget, duration: input.duration, generator: 'demo-templates', integration: 'demo',
     ...(input.copyContext ? { copyContext: validateBrand(input.copyContext) } : {}),
     ...(input.goalPlan ? { goalPlan: checkedBrief(input.goalPlan) } : {}),
-    campaignType: 'product-promotion', suggestedChannels: ['Social post', 'Paid social'],
+    campaignType: 'product-promotion', suggestedChannels: [...new Set(items.map(item => item.channel))],
     note: 'Demo only. No real publishing or spending.', items
   };
 }
