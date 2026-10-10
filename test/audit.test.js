@@ -5,6 +5,23 @@ import { freshWorkspace, validateWorkspace, validateBrief, briefChecks, briefObj
 import { validateBrand, plan, validateCampaign } from '../src/planner.js';
 
 const product = { id: 'p1', name: 'Course', description: 'Actual lessons', audience: 'Owners', facts: 'Includes practice', cta: 'Ask for details', problem: 'discovery conversations', difference: 'Live practice sessions', objections: 'session format', color: '#235a43', website: '' };
+
+test('zero-budget planning stays organic through campaign validation', () => {
+  const brand = validateBrand({ name: 'Example', business: 'Training', product: 'Course', audience: 'Owners', tone: 'Clear' });
+  const campaign = plan('Promote Course for 7 days with 0 DKK', brand, { product: 'Course', audience: 'Owners', days: 7, budget: 0 });
+  assert.deepEqual(campaign.suggestedChannels, ['Social post']);
+  assert.ok(campaign.items.every(i => i.channel === 'Social post' && i.cost === 0));
+  assert.deepEqual(validateCampaign(campaign).suggestedChannels, ['Social post']);
+});
+
+test('Arabic questions preserve meaning without nested question framing and ad headline repetition', () => {
+  const kit = generatePack({ ...product, name: 'دورة البيع', audience: 'أصحاب المشاريع', problem: 'كيف أشرح قيمة خدمتي؟' }, { language: 'ar' });
+  const social = kit.find(d => d.format === 'social').content;
+  assert.match(social, /سؤال قد يهمك: كيف أشرح قيمة خدمتي؟/);
+  assert.doesNotMatch(social, /هل تتساءل عن|؟؟|لـأصحاب/);
+  const ad = kit.find(d => d.format === 'ad').content;
+  assert.equal(ad.split('تعرّف على دورة البيع').length - 1, 1);
+});
 test('saving a kit and saving existing drafts preserve the other editor buffer', () => {
   const edits = new StudioEdits();
   edits.setKit(0, 'Edited kit', 'Original kit'); edits.setDraft('d1', 'Edited saved draft', 'Original draft');
