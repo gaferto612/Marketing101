@@ -44,6 +44,7 @@ export function saveCampaign(db, user, id, input, revision) {
     if (row.revision !== revision) throw new InputError('This campaign changed. Refresh before saving.', 409);
     if (!['draft', 'awaiting approval'].includes(row.status)) throw new InputError('Only unapproved campaigns can be edited.', 409);
     const data = validateCampaign(input);
+    if ((data.projectId || '') !== (row.data.projectId || '')) throw new InputError('A campaign cannot be moved to another project.', 409);
     db.prepare("UPDATE campaigns SET data=?,revision=revision+1,status='draft',approved_revision=NULL,approval_kind=NULL,cap=NULL WHERE id=?")
       .run(JSON.stringify(data), id);
     event(db, id, 'Content updated. Previous review invalidated.');

@@ -1,5 +1,6 @@
 import { InputError, parseRequest, plan, validateBrand, validateCampaign, money, variation } from './planner-browser.js';
-import { freshWorkspace, validateWorkspace, normalizeBackup } from './marketing-tools.js';
+import { freshWorkspace, validateWorkspace, normalizeBackup, backupCounts } from './marketing-tools.js';
+import { projectBrand } from './launch-tools.js';
 
 const key = 'marketing101.pages.demo.v1';
 const defaults = () => ({ version: 1, brand: null,
@@ -74,7 +75,7 @@ export function createBrowserDemo(storage, clock = Date.now) {
     }
     else if (['/restore', '/validate-backup'].includes(path) && method === 'POST') {
       const backup = normalizeBackup(input, validateBrand, validateCampaign);
-      if (path === '/validate-backup') return { products: backup.workspace.products.length, drafts: backup.workspace.drafts.length, campaigns: backup.campaigns.length, reports: backup.workspace.results.length };
+      if (path === '/validate-backup') return backupCounts(backup);
       const oldRevisions = new Map(store.campaigns.map(c => [c.id, c.revision]));
       const workspaceRevision = store.workspace.revision + 1;
       store.brand = backup.brand; store.workspace = backup.workspace; store.workspace.revision = workspaceRevision;
@@ -97,13 +98,18 @@ export function createBrowserDemo(storage, clock = Date.now) {
         maxCampaign: money(Number(input.maxCampaign) / 100), maxDaily: money(Number(input.maxDaily) / 100), adjustments: [] };
     } else if (path === '/campaigns' && method === 'GET') result = store.campaigns;
     else if (path === '/plan' && method === 'POST') {
-      if (!store.brand) throw new InputError('Save your brand profile first.');
-      const parsed = parseRequest(input.message, store.brand, input.details || {});
+      const project = input.details?.projectId && store.workspace.projects.find(p => p.id === input.details.projectId);
+      if (input.details?.projectId && !project) throw new InputError('Project not found.', 404);
+      const brand = project ? projectBrand(project) : store.brand;
+      if (!brand) throw new InputError('Save your brand profile first.');
+      const parsed = parseRequest(input.message, brand, input.details || {});
       if (parsed.missing.length) result = parsed;
       else {
+        const existing = input.details?.launchSnapshot && store.campaigns.find(c => (c.data.projectId || '') === (input.details.projectId || '') && c.data.launchSnapshot?.id === input.details.launchSnapshot.id);
+        if (existing) return clone({ missing: [], campaign: existing });
         const c = { id: crypto.randomUUID(), status: 'draft', revision: 1, approved_revision: null,
           approval_kind: null, cap: null, spent: 0, created: now,
-          data: validateCampaign(plan(input.message, store.brand, parsed.values, now)),
+          data: validateCampaign(plan(input.message, brand, parsed.values, now)),
           jobs: [], receipts: [], events: [], metrics: { mode: 'demo', reach: null, clicks: null, conversions: null } };
         log(c, 'Draft created in browser demo. No server or real publishing.', now);
         store.campaigns.unshift(c); result = { missing: [], campaign: c };
@@ -129,7 +135,11 @@ export function createBrowserDemo(storage, clock = Date.now) {
             const item = c.data.items.find(i => i.id === input.itemId);
             if (!item) throw new InputError('Content not found.');
             item.variant++; item.content = variation(c.data.copyContext || store.brand, c.data.product, c.data.audience, item.variant);
-          } else c.data = validateCampaign(input.data);
+          } else {
+            const data = validateCampaign(input.data);
+            if ((data.projectId || '') !== (c.data.projectId || '')) throw new InputError('A campaign cannot be moved to another project.', 409);
+            c.data = data;
+          }
           c.revision++; c.status = 'draft'; c.approved_revision = null; c.cap = null; c.approval_kind = null;
           log(c, 'Saved changes. Previous review invalidated.', now);
         } else if (operation === 'action' && method === 'POST') {

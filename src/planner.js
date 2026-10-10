@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { validateBrief } from '../public/marketing-tools.js';
+import { validateLaunch, launchPieces } from '../public/launch-tools.js';
 
 export class InputError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
@@ -91,6 +92,8 @@ export function variation(brand, product, audience, variant = 0) {
 }
 
 export function plan(message, brand, values, now = Date.now()) {
+  const launch = values.launchSnapshot ? checkedLaunch(values.launchSnapshot) : null;
+  if (launch) values = { ...values, audience: launch.audience, budget: launch.budget, days: launch.days, language: launch.language, productCta: launch.cta, productWebsite: launch.responseUrl, productFacts: launch.evidence };
   const copyContext = { ...brand, product: values.product, audience: values.audience,
     language: values.language === 'ar' ? 'ar' : values.language === 'en' ? 'en' : brand.language,
     cta: typeof values.productCta === 'string' ? values.productCta : brand.cta,
@@ -101,6 +104,8 @@ export function plan(message, brand, values, now = Date.now()) {
   const start = now + 60000;
   return {
     title: `${values.product} · ${values.days} days`, request: message, copyContext,
+    projectId: values.projectId ? text(values.projectId, 'Project ID', 80) : '',
+    ...(launch ? { launchSnapshot: launch } : {}),
     ...(values.goalPlan ? { goalPlan: checkedBrief(values.goalPlan) } : {}),
     product: values.product, audience: values.audience,
     objective: typeof values.goalObjective === 'string' ? values.goalObjective : 'Introduce the product and invite visits to its details page.',
@@ -110,7 +115,7 @@ export function plan(message, brand, values, now = Date.now()) {
     note: 'Channel suggestions only. All execution goes to Demo workspace. No real ads or posts are published.',
     items: Array.from({ length: count }, (_, i) => ({
       id: randomUUID(), account: 'demo-workspace', channel: budget === 0 || i === 0 ? 'Social post' : 'Paid social',
-      destination: copyContext.website, content: variation(copyContext, values.product, values.audience, i),
+      destination: copyContext.website, content: launch ? launchPieces(copyContext, launch)[i] : variation(copyContext, values.product, values.audience, i),
       variant: i, due: start + Math.round(i * (values.days - 1) / (count - 1)) * 86400000,
       cost: Math.floor(budget / count) + (i === count - 1 ? budget % count : 0)
     }))
@@ -137,6 +142,8 @@ export function validateCampaign(input) {
   if (items.reduce((sum, item) => sum + item.cost, 0) > budget) throw new InputError('Item allocations exceed the campaign budget.');
   return {
     title: text(input.title, 'Title', 240), request: text(input.request, 'Request', 4000),
+    projectId: input.projectId ? text(input.projectId, 'Project ID', 80) : '',
+    ...(input.launchSnapshot ? { launchSnapshot: checkedLaunch(input.launchSnapshot) } : {}),
     product: text(input.product, 'Product', 200), audience: text(input.audience, 'Audience', 400),
     objective: text(input.objective, 'Objective', 1000), tone: text(input.tone, 'Tone', 120),
     currency: 'DKK', budget, duration: input.duration, generator: 'demo-templates', integration: 'demo',
@@ -150,3 +157,4 @@ export function validateCampaign(input) {
 function checkedBrief(input) {
   try { return validateBrief(input); } catch (error) { throw new InputError(error.message); }
 }
+function checkedLaunch(input) { try { return validateLaunch(input); } catch (error) { throw new InputError(error.message); } }

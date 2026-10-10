@@ -7,7 +7,8 @@ import { fork } from 'node:child_process';
 import { openDatabase, transaction, event } from './db.js';
 import { InputError, validateBrand, parseRequest, plan, variation, text } from './planner.js';
 import { campaignFor, createCampaign, saveCampaign, transition, policyFor, validatePolicy } from './engine.js';
-import { freshWorkspace, validateWorkspace, normalizeBackup } from '../public/marketing-tools.js';
+import { freshWorkspace, validateWorkspace, normalizeBackup, backupCounts } from '../public/marketing-tools.js';
+import { projectBrand } from '../public/launch-tools.js';
 import { validateCampaign } from './planner.js';
 
 const derive = promisify(scrypt);
@@ -76,6 +77,7 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
     };
   }
   const staticFiles = { '/': ['index.html', 'text/html'], '/manual.html': ['manual.html', 'text/html'], '/user-manual.js': ['user-manual.js', 'text/javascript'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/marketing-tools.js': ['marketing-tools.js', 'text/javascript'], '/workspace-ui.js': ['workspace-ui.js', 'text/javascript'], '/editor-state.js': ['editor-state.js', 'text/javascript'] };
+  for (const file of ['launch-tools.js', 'launch-ui.js', 'project-client.js']) staticFiles[`/${file}`] = [file, 'text/javascript'];
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -125,7 +127,7 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
         const input = await body(req, 3100000);
         let backup;
         try { backup = normalizeBackup(input, validateBrand, validateCampaign); } catch (error) { throw new InputError(error.message); }
-        if (pathname === '/api/validate-backup') return reply({ products: backup.workspace.products.length, drafts: backup.workspace.drafts.length, campaigns: backup.campaigns.length, reports: backup.workspace.results.length });
+        if (pathname === '/api/validate-backup') return reply(backupCounts(backup));
         transaction(db, () => {
           // Replace only this authenticated user's records; imports get fresh global IDs.
           for (const table of ['deliveries', 'events', 'jobs']) db.prepare(`DELETE FROM ${table} WHERE campaign_id IN (SELECT id FROM campaigns WHERE user_id=?)`).run(user);
@@ -138,7 +140,10 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
             db.prepare('INSERT INTO campaigns(id,user_id,data,created) VALUES(?,?,?,?)').run(newId, user, JSON.stringify(c.data), Date.now());
             event(db, newId, 'Restored as an unapproved draft. No jobs or receipts imported.');
           }
-          for (const r of backup.workspace.results) r.campaignId = mapping.get(r.campaignId) || '';
+          for (const workspace of [backup.workspace, ...backup.workspace.projects.map(p => p.workspace)]) {
+            for (const r of workspace.results) r.campaignId = mapping.get(r.campaignId) || '';
+            for (const l of workspace.launches) l.campaignId = mapping.get(l.campaignId) || '';
+          }
           const previousWorkspace = db.prepare('SELECT data FROM workspaces WHERE user_id=?').get(user);
           backup.workspace.revision = (previousWorkspace ? JSON.parse(previousWorkspace.data).revision : 0) + 1;
           db.prepare('INSERT INTO workspaces(user_id,data) VALUES(?,?) ON CONFLICT(user_id) DO UPDATE SET data=excluded.data').run(user, JSON.stringify(backup.workspace));
@@ -192,11 +197,23 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
       }
       if (pathname === '/api/plan' && req.method === 'POST') {
         const row = db.prepare('SELECT data FROM brands WHERE user_id=?').get(user);
-        if (!row) throw new InputError('Save your brand profile first.');
-        const input = await body(req), brand = JSON.parse(row.data);
+        const input = await body(req);
+        let brand = row ? JSON.parse(row.data) : null;
+        if (input.details?.projectId) {
+          const workspace = db.prepare('SELECT data FROM workspaces WHERE user_id=?').get(user);
+          const project = workspace && validateWorkspace(JSON.parse(workspace.data)).projects.find(p => p.id === input.details.projectId);
+          if (!project) throw new InputError('Project not found in your workspace.', 404);
+          brand = projectBrand(project);
+        }
+        if (!brand) throw new InputError('Save your brand profile first.');
         const parsed = parseRequest(input.message, brand, input.details || {});
         if (parsed.missing.length) return reply(parsed);
-        const campaign = createCampaign(db, user, plan(input.message, brand, parsed.values));
+        const data = plan(input.message, brand, parsed.values);
+        if (data.launchSnapshot) {
+          const existing = db.prepare('SELECT id,data FROM campaigns WHERE user_id=?').all(user).find(c => { const saved = JSON.parse(c.data); return saved.projectId === data.projectId && saved.launchSnapshot?.id === data.launchSnapshot.id; });
+          if (existing) return reply({ missing: [], campaign: details(user, existing.id) });
+        }
+        const campaign = createCampaign(db, user, data);
         return reply({ missing: [], campaign: details(user, campaign.id) }, 201);
       }
       const match = pathname.match(/^\/api\/campaigns\/([a-f0-9-]+)(?:\/(action|regenerate|duplicate))?$/);
@@ -221,7 +238,7 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
           const campaign = campaignFor(db, user, id);
           const row = db.prepare('SELECT data FROM brands WHERE user_id=?').get(user);
           const item = campaign.data.items.find(i => i.id === input.itemId);
-          if (!item || !row) throw new InputError('Content or brand not found.', 404);
+          if (!item || (!campaign.data.copyContext && !row)) throw new InputError('Content or brand not found.', 404);
           item.variant++;
           item.content = variation(campaign.data.copyContext || JSON.parse(row.data), campaign.data.product, campaign.data.audience, item.variant);
           saveCampaign(db, user, id, campaign.data, input.revision); return reply(details(user, id));

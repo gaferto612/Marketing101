@@ -2,6 +2,9 @@ import { createWorkspaceUI } from './workspace-ui.js';
 import { freshWorkspace, briefObjective } from './marketing-tools.js';
 import { freezeForm } from './editor-state.js';
 import { renderManual } from './user-manual.js';
+import { createProjectApi } from './project-client.js';
+import { createLaunchUI } from './launch-ui.js';
+import { readiness as launchReadiness } from './launch-tools.js';
 const $ = selector => document.querySelector(selector);
 const browserDemo = document.querySelector('meta[name="marketing101-mode"]')?.content === 'browser-demo';
 let demoTransport;
@@ -11,10 +14,13 @@ const date = ms => new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', tim
 const localInput = ms => { const d = new Date(ms); return new Date(ms - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 const badge = status => `<span class="pill ${esc(status.replaceAll(' ', '-'))}">${esc(status)}</span>`;
 const state = { me: null, brand: null, policy: null, campaigns: [], workspace: freshWorkspace(), sessionEpoch: 0, view: 'dashboard', campaign: null, dirty: false, register: false, message: '', pending: null, selectedProduct: '', pendingDraft: null, activeBrief: null };
+state.projectId = ''; state.registry = freshWorkspace();
+const api = createProjectApi(transport, state);
 const workspaceUI = createWorkspaceUI({ api, state, esc, toast, navigate, openCampaign, busy, date, money });
+const launchUI = createLaunchUI({ api, state, esc, toast, navigate, openCampaign, busy, switchProject: async id => { state.projectId = id; await loadWorkspace(); navigate('launch'); } });
 let toastTimer;
 function toast(message) { $('#toast').textContent = message; $('#toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').hidden = true, 5000); }
-async function api(path, method = 'GET', data) {
+async function transport(path, method = 'GET', data) {
   const epoch = state.sessionEpoch, session = state.me;
   if (browserDemo) {
     demoTransport ||= import('./pages-demo.js');
@@ -45,8 +51,11 @@ function clearSessionView() {
   state.policy = { enabled: false, accounts: [], campaignTypes: [], maxCampaign: 0, maxDaily: 0, adjustments: [] };
   state.activeBrief = null; state.pendingDraft = null; state.selectedProduct = ''; state.message = ''; state.pending = null; state.dirty = false;
   workspaceUI.reset(); $('#view').replaceChildren(); $('#account-email').textContent = '';
+  launchUI.reset();
+  state.registry = freshWorkspace();
 }
 function showAuth() {
+  state.projectId = '';
   clearSessionView(); state.register = false; $('#auth-form').reset();
   $('#auth-title').textContent = 'Welcome back.'; $('#auth-description').textContent = 'Sign in to your campaign workspace.';
   $('#auth-submit').textContent = 'Sign in →'; $('#auth-toggle').textContent = 'New here? Create an account';
@@ -96,17 +105,20 @@ function navigate(view) {
   if (view === state.view) return;
   if (state.dirty && !confirm('Discard unsaved changes in this view?')) { $('#mobile-view').value = state.view === 'detail' ? 'dashboard' : state.view; return; }
   workspaceUI.discardEdits();
+  if (state.dirty) launchUI.reset();
   state.dirty = false; state.view = view; render();
 }
 window.addEventListener('beforeunload', event => { if (state.dirty) { event.preventDefault(); event.returnValue = ''; } });
-const headings = { dashboard: 'Overview', composer: 'Create campaign', brand: 'Brand profile', automation: 'Automation', detail: 'Campaign', products: 'Products', strategy: 'Strategy', studio: 'Content studio', creative: 'Ad designer', calendar: 'Calendar', results: 'Results', data: 'Backup & exports', manual: 'دليل الاستخدام / User manual' };
+const headings = { dashboard: 'Overview', composer: 'Create campaign', brand: 'Brand profile', automation: 'Automation', detail: 'Campaign', products: 'Products', strategy: 'Strategy', studio: 'Content studio', creative: 'Ad designer', calendar: 'Calendar', results: 'Results', data: 'Backup & exports', manual: 'دليل الاستخدام / User manual', projectsHub: 'المشاريع / Projects', launch: 'أطلق مشروعك / Launch', followup: 'المتابعة / Follow-up', tracking: 'مصادر النتائج / Tracking' };
 for (const [value, label] of Object.entries(headings)) if (value !== 'detail') { const option = document.createElement('option'); option.value = value; option.textContent = label; $('#mobile-view').append(option); }
 $('#mobile-view').addEventListener('change', event => navigate(event.target.value));
 function render() {
   $('#mobile-view').value = state.view === 'detail' ? 'dashboard' : state.view;
   $('#breadcrumb').textContent = `Workspace / ${headings[state.view]}`;
   document.querySelectorAll('nav [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === state.view || (state.view === 'detail' && button.dataset.view === 'dashboard')));
-  if (workspaceUI.views.includes(state.view)) workspaceUI.render(state.view);
+  $('#project-context').textContent = state.projectId ? `المشروع: ${state.registry.projects.find(p => p.id === state.projectId)?.name || ''}` : 'مساحة العمل الأصلية';
+  if (launchUI.views.includes(state.view)) launchUI.render(state.view);
+  else if (workspaceUI.views.includes(state.view)) workspaceUI.render(state.view);
   else if (state.view === 'manual') renderManual($('#view'));
   else ({ dashboard, composer, brand: brandForm, automation, detail }[state.view] || dashboard)();
 }
@@ -190,9 +202,10 @@ function missingFields(result) {
   return `<div class="note">I need ${result.missing.map(k => k === 'budget' ? 'the total budget' : 'the number of days').join(' and ')} to finish your plan.</div><div class="form-grid">${result.missing.map(key => key === 'budget' ? '<label>Total budget (DKK)<input name="budget" type="number" min="0" max="1000000" step="0.01" required><small>Use 0 for an organic demo.</small></label>' : '<label>Duration (days)<input name="days" type="number" min="1" max="90" step="1" required></label>').join('')}</div>`;
 }
 function automation() {
+  // Rules and daily caps are shared across all projects in this account.
   const p = state.policy;
   $('#view').innerHTML = `<div class="page-heading"><div><p class="eyebrow">YOUR RULES. YOUR CONTROL.</p><h1>Set the boundaries.</h1><p>Allow campaigns to run automatically within limits you explicitly choose.</p></div>${badge(p.enabled ? 'enabled' : 'disabled')}</div>
-    <div class="note">Automatic mode applies when you submit a draft for review. Campaigns outside your rules still require manual approval. Revoking permission stops pending automatic jobs at execution.</div>
+    <div class="note">These rules and daily limits apply across ALL your projects. Automatic mode applies when you submit a draft for review. Campaigns outside your rules still require manual approval. Revoking permission stops pending automatic jobs at execution.</div>
     <form id="policy-form"><section class="card"><h2>Automatic approval</h2><p class="muted">Manual approval is the default. All available execution is simulated.</p><label class="check-label"><input name="enabled" type="checkbox" ${p.enabled ? 'checked' : ''}> Enable automatic mode for matching campaigns</label><div class="form-grid"><div><h3>Allowed accounts</h3><label class="check-label"><input name="account" type="checkbox" ${p.accounts.includes('demo-workspace') ? 'checked' : ''}> Demo workspace</label><small class="muted">No live accounts connected.</small></div><div><h3>Allowed campaign types</h3><label class="check-label"><input name="type" type="checkbox" ${p.campaignTypes.includes('product-promotion') ? 'checked' : ''}> Product promotion</label></div></div></section>
     <section class="card"><h2>Spending limits</h2><p class="muted">Limits apply to simulated allocation. No money is charged.</p><div class="form-grid"><label>Maximum per campaign (DKK)<input name="maxCampaign" type="number" min="0" max="1000000" step="0.01" value="${p.maxCampaign / 100}" required></label><label>Maximum per day (DKK)<input name="maxDaily" type="number" min="0" max="1000000" step="0.01" value="${p.maxDaily / 100}" required><small>Across all your campaigns, measured by UTC day. Manual deliveries count toward usage; this limit restricts automatic jobs.</small></label></div><h3>Permitted automatic adjustments</h3><p class="muted">None in this release. The companion cannot change approved content, dates, or budgets. Pause and cancel remain available.</p><button class="button primary" type="submit">Save automation rules →</button></section></form>`;
   $('#policy-form').addEventListener('submit', event => { event.preventDefault(); busy(event.submitter, async () => {
@@ -204,10 +217,11 @@ function automation() {
 function detail() {
   const c = state.campaign, d = c.data, editable = ['draft', 'awaiting approval'].includes(c.status);
   const allocation = d.items.reduce((sum, i) => sum + i.cost, 0);
+  const launchInfo = d.launchSnapshot ? `<section class="card" dir="rtl"><h2>خطة الإطلاق والسوق</h2><p>${esc(d.launchSnapshot.name)} · ${esc(d.launchSnapshot.country)} · ${esc(d.launchSnapshot.cities)} · ${esc(d.launchSnapshot.timezone)}</p><p>تعريف النجاح: ${esc(d.launchSnapshot.success)}</p>${launchReadiness(d.launchSnapshot).map(check => `<p>${check.done ? '✓' : '○'} ${esc(check.label)}</p>`).join('')}<p class="small muted">تأكيدات بشرية محفوظة وقت إنشاء الحملة، وليست فحصاً آلياً أو ضمان نتائج. المواعيد أدناه بتوقيت جهازك.</p></section>` : '';
   const readiness = d.items.some(i => !i.destination) ? '<section class="card"><h2>Before a real launch</h2><p dir="auto">Some content has no response link. Specify where customers should respond, such as a product page or a contact link, and check that it works. / بعض المحتوى بلا رابط للتواصل: حدّد أين يرسل العميل استفساره وتأكد أن الوجهة تعمل.</p><p class="small muted">Demo approval is available; simulated delivery does not validate customer contact or distribution.</p></section>' : '';
   $('#view').innerHTML = `<div class="detail-top"><button class="text-button" data-go="dashboard">← All campaigns</button><div>${badge(c.status)} <span class="pill demo">DEMO CAMPAIGN</span></div></div><div class="page-heading"><div><h1>${esc(d.title)}</h1><p>Review the details. Make it yours. Then set it in motion.</p></div></div>
     <div class="detail-grid"><div><section class="card"><h2>The campaign brief</h2><dl class="brief-grid"><div><dt>Product</dt><dd>${esc(d.product)}</dd></div><div><dt>Audience</dt><dd>${esc(d.audience)}</dd></div><div><dt>Objective</dt><dd>${esc(d.objective)}</dd></div><div><dt>Tone / duration</dt><dd>${esc(d.tone)} · ${esc(d.duration)} days</dd></div><div><dt>Suggested channels</dt><dd>${d.suggestedChannels.map(esc).join(', ')}</dd></div><div><dt>Execution destination</dt><dd>Demo workspace only</dd></div></dl><div class="note">${esc(d.note)} Content uses demo templates. Review all wording and links.</div></section>
-    ${readiness}${d.budget === 0 ? '<p class="note">Zero-budget plan: organic content for manual distribution through accounts or communities you are allowed to use. Demo execution does not distribute it to an audience.</p>' : ''}
+    ${launchInfo}${readiness}${d.budget === 0 ? '<p class="note">Zero-budget plan: organic content for manual distribution through accounts or communities you are allowed to use. Demo execution does not distribute it to an audience.</p>' : ''}
     <form id="campaign-form">${editable ? `<section class="card"><div class="form-grid"><label>Campaign title<input name="title" required maxlength="240" value="${esc(d.title)}"></label><label>Total simulated budget (DKK)<input name="budget" type="number" min="0" max="1000000" step="0.01" required value="${d.budget / 100}"></label></div><button type="button" id="demo-now" class="text-button">Schedule all pieces now for a quick demo ↗</button><p class="small muted">Save your changes, then review and approve. Otherwise the original schedule is used.</p></section>` : ''}
     <div class="section-heading"><h2>Content & schedule</h2><span class="small muted">${d.items.length} pieces · times shown locally</span></div>
     ${d.items.map((item, index) => `<section class="card content-card" data-item="${esc(item.id)}"><div class="content-heading"><h3><span class="muted">0${index + 1}</span> &nbsp; ${esc(item.channel)}</h3>${editable ? `<button class="text-button" type="button" data-regenerate="${esc(item.id)}">↻ Regenerate</button>` : '<span class="pill">APPROVED CONTENT</span>'}</div>${editable ? `<label>Exact content<textarea dir="auto" aria-label="Exact content" name="content-${item.id}" maxlength="4000" required>${esc(item.content)}</textarea></label><div class="form-grid"><label>Product link<input name="link-${item.id}" type="url" value="${esc(item.destination)}" maxlength="1000"></label><label>Destination<select name="account-${item.id}"><option value="demo-workspace">Demo workspace</option></select></label><label>Scheduled time<input name="due-${item.id}" type="datetime-local" required value="${localInput(item.due)}"></label><label>Simulated allocation (DKK)<input name="cost-${item.id}" type="number" min="0" max="1000000" step="0.01" required value="${item.cost / 100}"></label></div>` : `<div dir="auto" class="readonly-content">${esc(item.content)}</div><div class="content-meta"><span>Link: ${esc(item.destination)}</span><span>Destination: Demo workspace · ${esc(item.channel)}</span><span>Scheduled: ${date(item.due)} · Allocation: ${money(item.cost)}</span><span>Job status: ${esc(c.jobs.find(j => j.item_id === item.id)?.state || 'not queued')}</span></div>`}</section>`).join('')}
