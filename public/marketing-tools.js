@@ -4,7 +4,9 @@ export const formats = {
   email: 'Email draft', message: 'Message draft', landing: 'Landing page copy'
 };
 export const objectives = { awareness: 'Awareness', launch: 'Product launch', leads: 'Enquiries', offer: 'Promote an offer' };
-export const freshWorkspace = () => ({ version: 1, revision: 0, products: [], drafts: [], results: [] });
+export const funnelStages = { awareness: 'Discover', consideration: 'Evaluate', action: 'Take action' };
+export const goalMetrics = { impressions: 'Impressions', clicks: 'Clicks', leads: 'Leads', sales: 'Sales', revenue: 'Revenue (DKK)' };
+export const freshWorkspace = () => ({ version: 1, revision: 0, products: [], drafts: [], results: [], briefs: [] });
 const error = message => { throw new Error(message); };
 const string = (value, label, max, required = false) => {
   if (typeof value !== 'string' || value.length > max || (required && !value.trim())) error(`${label}: enter ${required ? 'a value' : 'text'} within ${max} characters.`);
@@ -23,6 +25,9 @@ export function validateProduct(p) {
   return { id: id(p.id), name: string(p.name, 'Product name', 200, true), description: string(p.description, 'Description', 2000, true),
     audience: string(p.audience, 'Audience', 400, true), offer: string(p.offer || '', 'Offer', 500),
     facts: string(p.facts || '', 'Approved facts', 3000), cta: string(p.cta || '', 'Call to action', 200),
+    problem: string(p.problem || '', 'Audience problem', 600), difference: string(p.difference || '', 'Approved differentiator', 600),
+    objections: string(p.objections || '', 'Customer questions', 600),
+    revision: Number.isSafeInteger(p.revision) && p.revision > 0 ? p.revision : 1,
     website: optionalLink(p.website), color: /^#[a-f0-9]{6}$/i.test(p.color) ? p.color : '#235a43' };
 }
 export function validateWorkspace(input) {
@@ -38,6 +43,8 @@ export function validateWorkspace(input) {
     return { id: id(d.id), productId: d.productId, format: d.format, language: d.language,
       title: string(d.title, 'Draft title', 240, true), content: string(d.content, 'Draft content', 8000, true),
       stage: ['draft', 'ready', 'used'].includes(d.stage) ? d.stage : 'draft',
+      sourceRevision: Number.isSafeInteger(d.sourceRevision) && d.sourceRevision >= 0 ? d.sourceRevision : 0,
+      goal: Object.hasOwn(objectives, d.goal) ? d.goal : 'awareness',
       updated: Number.isSafeInteger(d.updated) ? d.updated : Date.now() };
   }));
   const results = unique(input.results.map(r => {
@@ -50,7 +57,46 @@ export function validateWorkspace(input) {
     if (row.impressions !== null && row.clicks !== null && row.clicks > row.impressions) error('Clicks cannot exceed impressions in the same report.');
     return row;
   }));
-  return { version: 1, revision: Number.isSafeInteger(input.revision) && input.revision >= 0 ? input.revision : 0, products, drafts, results };
+  const rawBriefs = input.briefs ?? [];
+  if (!Array.isArray(rawBriefs) || rawBriefs.length > 250) error('Workspace briefs must contain at most 250 records.');
+  const briefs = unique(rawBriefs.map(b => { const brief = validateBrief(b); if (!productIds.has(brief.productId)) error('A brief refers to a missing product.'); return brief; }));
+  return { version: 1, revision: Number.isSafeInteger(input.revision) && input.revision >= 0 ? input.revision : 0, products, drafts, results, briefs };
+}
+
+export function validateBrief(b) {
+  if (!Object.hasOwn(objectives, b.goal) || !Object.hasOwn(funnelStages, b.stage) || !Object.hasOwn(goalMetrics, b.metric)) error('Choose a supported objective, stage, and measurement.');
+  if (typeof b.target !== 'number' || !Number.isFinite(b.target) || b.target <= 0 || b.target > 1e12) error('Set a positive planning target.');
+  if (b.metric !== 'revenue' && !Number.isSafeInteger(b.target)) error('Count targets must be whole numbers.');
+  if (!Number.isInteger(b.days) || b.days < 1 || b.days > 90) error('Plan duration must be 1–90 days.');
+  if (typeof b.budget !== 'number' || !Number.isFinite(b.budget) || b.budget < 0 || b.budget > 1000000) error('Budget must be 0–1,000,000 DKK.');
+  return { id: id(b.id), productId: id(b.productId), goal: b.goal, stage: b.stage, metric: b.metric,
+    target: b.target, days: b.days, budget: b.budget, hypothesis: string(b.hypothesis || '', 'Hypothesis', 800),
+    updated: Number.isSafeInteger(b.updated) ? b.updated : Date.now() };
+}
+export function briefChecks(product, brief) {
+  return [
+    { done: !!product.audience, label: 'Define a specific audience' },
+    { done: !!product.problem, label: 'Describe the audience question or problem' },
+    { done: !!product.difference, label: 'State a substantiated differentiator' },
+    { done: !!product.facts, label: 'Provide approved facts or evidence' },
+    { done: !!product.cta, label: 'Choose one clear call to action' },
+    { done: !!brief?.hypothesis, label: 'Write a testable hypothesis' }
+  ];
+}
+export function briefObjective(brief) {
+  return `${objectives[brief.goal]} · ${funnelStages[brief.stage]} · Planning target: ${brief.target} ${goalMetrics[brief.metric]} in ${brief.days} days (target, not a forecast).${brief.hypothesis ? ` Hypothesis: ${brief.hypothesis.slice(0, 450)}` : ''}`;
+}
+export function filterDrafts(drafts, { query = '', format = '', stage = '', language = '' } = {}) {
+  const term = query.trim().toLocaleLowerCase();
+  return drafts.filter(d => (!term || `${d.title} ${d.content}`.toLocaleLowerCase().includes(term)) && (!format || d.format === format) && (!stage || d.stage === stage) && (!language || d.language === language));
+}
+export function filterResults(rows, { campaignId = '', from = '', to = '' } = {}) {
+  if (from && to && from > to) error('Start date must be before or equal to end date.');
+  return rows.filter(r => (!campaignId || (campaignId === 'unassigned' ? !r.campaignId : r.campaignId === campaignId)) && (!from || r.date >= from) && (!to || r.date <= to));
+}
+export function metricsCoverage(rows) {
+  const pair = (a, b) => rows.filter(r => r[a] !== null && r[b] !== null).length;
+  return { total: rows.length, ctr: pair('clicks', 'impressions'), cpl: pair('spend', 'leads'), roas: pair('revenue', 'spend') };
 }
 
 export function generatePack(product, { language = 'ar', goal = 'awareness', tone = 'clear', variant = 0 } = {}) {
@@ -62,12 +108,21 @@ export function generatePack(product, { language = 'ar', goal = 'awareness', ton
   const link = p.website ? `\n${p.website}` : '';
   const hooks = ar ? [`تعرّف على ${p.name}`, `${p.name} — إليك التفاصيل`, `هل يناسبك ${p.name}؟`]
     : [`Discover ${p.name}`, `${p.name} — the details`, `Is ${p.name} right for you?`];
-  const hook = hooks[((variant % 3) + 3) % 3];
-  const opening = ar ? { awareness: hook, launch: `نقدّم لك ${p.name}`, leads: `مهتم بـ${p.name}؟`, offer: `اطّلع على عرض ${p.name}` }[goal]
-    : { awareness: hook, launch: `Introducing ${p.name}`, leads: `Interested in ${p.name}?`, offer: `Explore the offer for ${p.name}` }[goal];
+  const index = ((variant % 3) + 3) % 3;
+  const opening = ar ? {
+    awareness: hooks, launch: [`نقدّم لك ${p.name}`, `تعرّف على تفاصيل ${p.name}`, `${p.name} — نظرة على المنتج`],
+    leads: [`مهتم بـ${p.name}؟`, `ما الذي تريد معرفته عن ${p.name}؟`, `اسألنا عن ${p.name}`],
+    offer: [`اطّلع على عرض ${p.name}`, `إليك تفاصيل عرض ${p.name}`, `هل يناسبك عرض ${p.name}؟`]
+  }[goal][index] : {
+    awareness: hooks, launch: [`Introducing ${p.name}`, `Meet ${p.name}`, `${p.name} — a closer look`],
+    leads: [`Interested in ${p.name}?`, `What would you like to know about ${p.name}?`, `Ask us about ${p.name}`],
+    offer: [`Explore the offer for ${p.name}`, `The details of the ${p.name} offer`, `Is the ${p.name} offer right for you?`]
+  }[goal][index];
   const intro = tone === 'friendly' ? (ar ? 'أهلاً! ' : 'Hello! ') : '';
   const details = tone === 'concise' ? facts.slice(0, 1).join('\n') : [p.description, factText].filter(Boolean).join('\n\n');
-  const body = [intro + opening, ar ? `لـ${p.audience}.` : `For ${p.audience}.`, details, p.offer, cta + link].filter(Boolean).join('\n\n');
+  const context = p.problem ? (ar ? `هل تتساءل عن ${p.problem}؟` : `Exploring ${p.problem}?`) : '';
+  const questions = p.objections && goal === 'leads' ? (ar ? `أسئلتك حول ${p.objections} مرحّب بها.` : `Questions about ${p.objections} are welcome.`) : '';
+  const body = [intro + opening, ar ? `لـ${p.audience}.` : `For ${p.audience}.`, context, details, p.difference, questions, p.offer, cta + link].filter(Boolean).join('\n\n');
   const items = {
     social: body,
     ad: `${ar ? 'العنوان' : 'Headline'}: ${opening}\n\n${ar ? 'النص' : 'Body'}:\n${body}`,
@@ -90,7 +145,7 @@ export function metrics(rows) {
   const total = field => rows.some(r => r[field] !== null) ? rows.reduce((n, r) => n + (r[field] ?? 0), 0) : null;
   // Ratios use only rows with both measurements, never treat missing values as zero.
   const ratio = (num, den, factor = 1) => { const pairs = rows.filter(r => r[num] !== null && r[den] !== null); const base = pairs.reduce((n, r) => n + r[den], 0); return base > 0 ? pairs.reduce((n, r) => n + r[num], 0) / base * factor : null; };
-  return { spend: total('spend'), clicks: total('clicks'), leads: total('leads'), revenue: total('revenue'),
+  return { spend: total('spend'), impressions: total('impressions'), clicks: total('clicks'), leads: total('leads'), sales: total('sales'), revenue: total('revenue'),
     ctr: ratio('clicks', 'impressions', 100), cpl: ratio('spend', 'leads'), roas: ratio('revenue', 'spend') };
 }
 export function csv(rows) {

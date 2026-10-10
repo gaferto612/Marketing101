@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { validateBrief } from '../public/marketing-tools.js';
 
 export class InputError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
@@ -100,8 +101,9 @@ export function plan(message, brand, values, now = Date.now()) {
   const start = now + 60000;
   return {
     title: `${values.product} · ${values.days} days`, request: message, copyContext,
+    ...(values.goalPlan ? { goalPlan: checkedBrief(values.goalPlan) } : {}),
     product: values.product, audience: values.audience,
-    objective: 'Introduce the product and invite visits to its details page.',
+    objective: typeof values.goalObjective === 'string' ? values.goalObjective : 'Introduce the product and invite visits to its details page.',
     tone: brand.tone, currency: 'DKK', budget, duration: values.days,
     generator: 'demo-templates', integration: 'demo', campaignType: 'product-promotion',
     suggestedChannels: ['Social post', 'Paid social'],
@@ -139,7 +141,12 @@ export function validateCampaign(input) {
     objective: text(input.objective, 'Objective', 1000), tone: text(input.tone, 'Tone', 120),
     currency: 'DKK', budget, duration: input.duration, generator: 'demo-templates', integration: 'demo',
     ...(input.copyContext ? { copyContext: validateBrand(input.copyContext) } : {}),
+    ...(input.goalPlan ? { goalPlan: checkedBrief(input.goalPlan) } : {}),
     campaignType: 'product-promotion', suggestedChannels: ['Social post', 'Paid social'],
     note: 'Demo only. No real publishing or spending.', items
   };
+}
+
+function checkedBrief(input) {
+  try { return validateBrief(input); } catch (error) { throw new InputError(error.message); }
 }

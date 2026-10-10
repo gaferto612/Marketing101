@@ -5,6 +5,7 @@ import { openDatabase } from '../src/db.js';
 import { createApp } from '../src/server.js';
 import { runDue } from '../src/engine.js';
 import { freshWorkspace } from '../public/marketing-tools.js';
+import { scryptSync } from 'node:crypto';
 
 test('authenticated HTTP journey, access controls, CSRF and exact approval', async t => {
   const db = openDatabase(':memory:');
@@ -83,4 +84,13 @@ test('authenticated HTTP journey, access controls, CSRF and exact approval', asy
   assert.equal((await a('/api/me')).status, 401);
   assert.equal((await a('/api/login', 'POST', { email: 'a@example.com', password: 'incorrect long password' })).status, 401);
   assert.equal((await a('/api/login', 'POST', { email: 'a@example.com', password: 'correct long password' })).status, 200);
+  assert.equal((await a('/api/login', 'POST', { email: 'a@example.com', password: ' correct long password ' })).status, 401);
+  const padded = client();
+  assert.equal((await padded('/api/register', 'POST', { email: 'padded@example.com', password: '  exact padded password  ' })).status, 201);
+  assert.equal((await padded('/api/logout', 'POST', {})).status, 200);
+  assert.equal((await padded('/api/login', 'POST', { email: 'padded@example.com', password: 'exact padded password' })).status, 401);
+  assert.equal((await padded('/api/login', 'POST', { email: 'padded@example.com', password: '  exact padded password  ' })).status, 200);
+  const salt = '0123456789abcdef0123456789abcdef';
+  db.prepare('INSERT INTO users(id,email,password) VALUES(?,?,?)').run('legacy-user', 'legacy@example.com', `${salt}:${scryptSync('legacy long password', salt, 64).toString('hex')}`);
+  assert.equal((await client()('/api/login', 'POST', { email: 'legacy@example.com', password: ' legacy long password ' })).status, 200);
 });

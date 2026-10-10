@@ -4,6 +4,16 @@ A personal campaign companion: describe a promotion, edit its plan and content, 
 
 ## Free marketing workspace
 
+### Audited strategy and workflow
+
+**Strategy** saves a decision stage, objective, primary measurement, user-chosen target, period, budget, and hypothesis. Select **Use brief in campaign** to capture the goal; later brief edits do not change its existing snapshot. In **Results**, choose campaign/date filters to see scoped metrics, paired-data coverage, and reported outcomes versus the saved target. Targets are not forecasts, and manual reports are not attribution evidence.
+
+Products include optional audience questions, a substantiated differentiator, and customer questions. Product edits reset related drafts to draft; source notices identify material needing review. Search/filter the library and load 20 cards at a time. Kit edits and saved-draft edits have independent buffers, including hidden/filter edits. Deletion is blocked with pending work, and explicit discard is available. Variation cycles through three local options for each objective.
+
+The overview includes next steps, mobile navigation uses a destination selector, and **Reload workspace** retrieves current records after a revision conflict, confirming discard if needed. Logout clears private views and returns to sign-in mode. New server passwords preserve exact input; existing hashes remain compatible.
+
+See [the audit and official-platform comparison](docs/AUDIT_2026-10-10.md) for findings, evidence, boundaries, and next priorities.
+
 All of these tools run without paid APIs, AI subscriptions, marketing-account connections, or a required product website. The Pages version stores its records in this browser; the Node version stores them per authenticated account in SQLite.
 
 | Area | Available now |
@@ -23,7 +33,7 @@ Templates use your supplied information and do not research, fact-check, or tran
 
 Manual **Results** are separate from simulated receipts. Missing measurements stay null; ratios use only reports containing both required measurements. Do not enter overlapping reports if you want totals to represent distinct periods. All monetary reports currently use DKK. Browser policy limits remain simulations, not a billing or security system.
 
-Workspace limits: 250 products, drafts, and manual reports per collection, and at most 2 MB of workspace JSON. Backup imports allow up to 3 MB and 250 campaign plans. Export and reduce old records when approaching limits. Backups contain plain marketing data, are not encrypted, and omit simulated jobs, receipts, and automation permission. Restoration replaces only your browser workspace or authenticated account's records; the Node version assigns new campaign IDs to avoid collisions. Every restored or duplicated campaign requires fresh review and approval. Workspace revision checks reject stale saves from other tabs. Existing Pages data migrates to the new workspace without discarding its campaigns.
+Workspace limits: 250 products, drafts, manual reports, and strategy briefs per collection, and at most 2 MB of workspace JSON. Backup imports allow up to 3 MB and 250 campaign plans. Export and reduce old records when approaching limits. Backups contain plain marketing data, are not encrypted, and omit simulated jobs, receipts, and automation permission. Restoration replaces only your browser workspace or authenticated account's records; the Node version assigns new campaign IDs to avoid collisions. Every restored or duplicated campaign requires fresh review and approval. Workspace revision checks reject stale saves from other tabs. Existing Pages data migrates to the new workspace without discarding its campaigns.
 
 ## GitHub Pages browser demo
 

@@ -13,7 +13,7 @@ function setup() {
 }
 const brand = { name: 'Demo brand', business: 'Courses', product: 'sales course', audience: 'business owners', tone: 'Friendly', website: 'https://example.com', claims: '' };
 test('Pages artifact contains only public assets, relative paths and explicit browser mode', () => {
-  assert.deepEqual(readdirSync('.pages-dist').sort(), ['.nojekyll', 'app.js', 'index.html', 'marketing-tools.js', 'pages-demo.js', 'planner-browser.js', 'styles.css', 'workspace-ui.js']);
+  assert.deepEqual(readdirSync('.pages-dist').sort(), ['.nojekyll', 'app.js', 'editor-state.js', 'index.html', 'marketing-tools.js', 'pages-demo.js', 'planner-browser.js', 'styles.css', 'workspace-ui.js']);
   const html = readFileSync('.pages-dist/index.html', 'utf8');
   assert.match(html, /content="browser-demo"/);
   assert.match(html, /src="\.\/app.js"/);
