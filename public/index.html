@@ -34,6 +34,7 @@
   <div id="app-shell" class="app-shell" hidden>
     <aside class="sidebar">
       <a class="logo" href="/" aria-label="Marketing101 home"><span class="logo-mark">m</span> Marketing<span>101</span></a>
+      <label class="mobile-nav">Workspace navigation<select id="mobile-view" aria-label="Workspace navigation"></select></label>
       <p class="nav-label">WORKSPACE</p>
       <nav aria-label="Main navigation">
         <button data-view="dashboard"><span aria-hidden="true">◫</span> Overview</button>
@@ -41,6 +42,7 @@
         <button data-view="brand"><span aria-hidden="true">◇</span> Brand profile</button>
         <button data-view="automation"><span aria-hidden="true">⇄</span> Automation</button>
         <button data-view="products"><span aria-hidden="true">▧</span> Products</button>
+        <button data-view="strategy"><span aria-hidden="true">◎</span> Strategy</button>
         <button data-view="studio"><span aria-hidden="true">✎</span> Content studio</button>
         <button data-view="creative"><span aria-hidden="true">▣</span> Ad designer</button>
         <button data-view="calendar"><span aria-hidden="true">▦</span> Calendar</button>
@@ -50,7 +52,7 @@
       <div class="sidebar-bottom"><div class="demo-note"><span class="dot"></span><strong>Demo workspace</strong><p>Explore the full flow.<br>Nothing goes live.</p></div><p id="account-email" class="small"></p></div>
     </aside>
     <main>
-      <header class="topbar"><span id="breadcrumb">Workspace / Overview</span><div class="topbar-actions"><span class="pill demo">DEMO MODE</span><button id="logout" class="text-button">Sign out ↗</button></div></header>
+      <header class="topbar"><span id="breadcrumb">Workspace / Overview</span><div class="topbar-actions"><span class="pill demo">DEMO MODE</span><button id="refresh-workspace" class="text-button" aria-label="Reload workspace">↻</button><button id="logout" class="text-button">Sign out ↗</button></div></header>
       <div id="view" class="view"></div>
     </main>
   </div>

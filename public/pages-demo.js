@@ -67,7 +67,7 @@ export function createBrowserDemo(storage, clock = Date.now) {
     if (method === 'GET') tick(store, now);
     let result;
     if (path === '/me') result = { email: 'Local browser demo · no account', csrf: 'browser-demo' };
-    else if (path === '/workspace' && method === 'GET') result = store.workspace;
+    else if (path === '/workspace' && method === 'GET') { store.workspace = validateWorkspace(store.workspace); result = store.workspace; }
     else if (path === '/workspace' && method === 'PUT') {
       if (input.revision !== store.workspace.revision) throw new InputError('Workspace changed in another tab. Refresh before saving.', 409);
       result = validateWorkspace(input); result.revision = store.workspace.revision + 1; store.workspace = result;

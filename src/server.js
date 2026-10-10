@@ -17,8 +17,9 @@ async function passwordHash(password, salt = randomBytes(16).toString('hex')) {
   return `${salt}:${result.toString('hex')}`;
 }
 async function passwordMatches(password, saved) {
-  const [salt, hex] = saved.split(':');
-  const check = (await passwordHash(password, salt)).split(':')[1];
+  const modern = saved.startsWith('v2:');
+  const [salt, hex] = (modern ? saved.slice(3) : saved).split(':');
+  const check = (await passwordHash(modern ? password : password.trim(), salt)).split(':')[1];
   return timingSafeEqual(Buffer.from(hex, 'hex'), Buffer.from(check, 'hex'));
 }
 
@@ -74,7 +75,7 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
       metrics: { mode: 'demo', reach: null, clicks: null, conversions: null }
     };
   }
-  const staticFiles = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/marketing-tools.js': ['marketing-tools.js', 'text/javascript'], '/workspace-ui.js': ['workspace-ui.js', 'text/javascript'] };
+  const staticFiles = { '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/styles.css': ['styles.css', 'text/css'], '/marketing-tools.js': ['marketing-tools.js', 'text/javascript'], '/workspace-ui.js': ['workspace-ui.js', 'text/javascript'], '/editor-state.js': ['editor-state.js', 'text/javascript'] };
   const server = http.createServer(async (req, res) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Referrer-Policy', 'no-referrer');
@@ -101,11 +102,11 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
         const input = await body(req);
         const email = text(input.email, 'Email', 254).toLowerCase();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new InputError('Enter a valid email address.');
-        const password = text(input.password, 'Password', 256);
-        if (password.length < 12) throw new InputError('Use a password of at least 12 characters.');
+        const password = input.password;
+        if (typeof password !== 'string' || password.length < 12 || password.length > 256 || !password.trim()) throw new InputError('Use a password of 12–256 characters.');
         if (pathname === '/api/register') {
           if (registrationCode && input.code !== registrationCode) throw new InputError('An invitation code is required.', 403);
-          const id = randomUUID(), saved = await passwordHash(password);
+          const id = randomUUID(), saved = `v2:${await passwordHash(password)}`;
           try { db.prepare('INSERT INTO users(id,email,password) VALUES(?,?,?)').run(id, email, saved); }
           catch { throw new InputError('Unable to register this email. Try signing in.', 409); }
           return reply(signIn({ id, email }, res), 201);
@@ -148,7 +149,7 @@ export function createApp({ db = openDatabase(), origin = process.env.APP_ORIGIN
       if (pathname === '/api/workspace') {
         if (req.method === 'GET') {
           const row = db.prepare('SELECT data FROM workspaces WHERE user_id=?').get(user);
-          return reply(row ? JSON.parse(row.data) : freshWorkspace());
+          return reply(row ? validateWorkspace(JSON.parse(row.data)) : freshWorkspace());
         }
         if (req.method === 'PUT') {
           const input = await body(req, 2100000);

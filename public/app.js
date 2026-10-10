@@ -1,4 +1,6 @@
 import { createWorkspaceUI } from './workspace-ui.js';
+import { freshWorkspace, briefObjective } from './marketing-tools.js';
+import { freezeForm } from './editor-state.js';
 const $ = selector => document.querySelector(selector);
 const browserDemo = document.querySelector('meta[name="marketing101-mode"]')?.content === 'browser-demo';
 let demoTransport;
@@ -7,20 +9,24 @@ const money = cents => new Intl.NumberFormat('en-DK', { style: 'currency', curre
 const date = ms => new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(ms);
 const localInput = ms => { const d = new Date(ms); return new Date(ms - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
 const badge = status => `<span class="pill ${esc(status.replaceAll(' ', '-'))}">${esc(status)}</span>`;
-const state = { me: null, brand: null, policy: null, campaigns: [], workspace: { version: 1, revision: 0, products: [], drafts: [], results: [] }, view: 'dashboard', campaign: null, dirty: false, register: false, message: '', pending: null, selectedProduct: '', pendingDraft: null };
+const state = { me: null, brand: null, policy: null, campaigns: [], workspace: freshWorkspace(), sessionEpoch: 0, view: 'dashboard', campaign: null, dirty: false, register: false, message: '', pending: null, selectedProduct: '', pendingDraft: null, activeBrief: null };
 const workspaceUI = createWorkspaceUI({ api, state, esc, toast, navigate, openCampaign, busy, date, money });
 let toastTimer;
 function toast(message) { $('#toast').textContent = message; $('#toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').hidden = true, 5000); }
 async function api(path, method = 'GET', data) {
+  const epoch = state.sessionEpoch, session = state.me;
   if (browserDemo) {
     demoTransport ||= import('./pages-demo.js');
-    return (await demoTransport).demoApi(path, method, data);
+    const result = await (await demoTransport).demoApi(path, method, data);
+    if (state.sessionEpoch !== epoch || state.me !== session) throw new Error('Workspace session changed; the old response was discarded.');
+    return result;
   }
   const res = await fetch(`/api${path}`, {
     method, headers: { 'Content-Type': 'application/json', ...(state.me ? { 'X-CSRF-Token': state.me.csrf } : {}) },
     ...(data === undefined ? {} : { body: JSON.stringify(data) })
   });
   const result = await res.json();
+  if (state.sessionEpoch !== epoch || state.me !== session) throw new Error('Workspace session changed; the old response was discarded.');
   if (!res.ok) {
     if (res.status === 401 && state.me) { state.me = null; showAuth(); }
     throw new Error(result.error || 'Request failed.');
@@ -33,10 +39,24 @@ async function busy(button, fn) {
   try { await fn(); } catch (error) { toast(error.message); }
   finally { if (button?.isConnected) button.disabled = false; }
 }
-function showAuth() { $('#app-shell').hidden = true; $('#auth-screen').hidden = false; }
+function clearSessionView() {
+  state.sessionEpoch++; state.brand = null; state.workspace = freshWorkspace(); state.campaigns = []; state.campaign = null;
+  state.policy = { enabled: false, accounts: [], campaignTypes: [], maxCampaign: 0, maxDaily: 0, adjustments: [] };
+  state.activeBrief = null; state.pendingDraft = null; state.selectedProduct = ''; state.message = ''; state.pending = null; state.dirty = false;
+  workspaceUI.reset(); $('#view').replaceChildren(); $('#account-email').textContent = '';
+}
+function showAuth() {
+  clearSessionView(); state.register = false; $('#auth-form').reset();
+  $('#auth-title').textContent = 'Welcome back.'; $('#auth-description').textContent = 'Sign in to your campaign workspace.';
+  $('#auth-submit').textContent = 'Sign in →'; $('#auth-toggle').textContent = 'New here? Create an account';
+  $('#invite-field').hidden = true; $('#auth-form [name=password]').autocomplete = 'current-password'; $('#auth-error').textContent = '';
+  $('#app-shell').hidden = true; $('#auth-screen').hidden = false;
+}
 async function loadWorkspace() {
-  workspaceUI.reset(); state.pendingDraft = null; state.selectedProduct = '';
-  [state.brand, state.policy, state.campaigns, state.workspace] = await Promise.all([api('/brand'), api('/policy'), api('/campaigns'), api('/workspace')]);
+  clearSessionView(); const epoch = state.sessionEpoch, me = state.me;
+  const loaded = await Promise.all([api('/brand'), api('/policy'), api('/campaigns'), api('/workspace')]);
+  if (state.sessionEpoch !== epoch || state.me !== me) return;
+  [state.brand, state.policy, state.campaigns, state.workspace] = loaded;
   $('#auth-screen').hidden = true; $('#app-shell').hidden = false; $('#account-email').textContent = state.me.email;
   state.view = 'dashboard'; render();
 }
@@ -63,16 +83,26 @@ $('#logout').addEventListener('click', () => busy($('#logout'), async () => {
     await api('/reset', 'POST', {}); state.campaign = null; state.message = ''; state.pending = null; state.dirty = false;
     await loadWorkspace(); toast('Browser demo reset.'); return;
   }
+  if (state.dirty && !confirm('Sign out and discard unsaved changes?')) return;
   await api('/logout', 'POST', {}); state.me = null; state.campaign = null; state.message = ''; state.pending = null; showAuth();
+}));
+$('#refresh-workspace').addEventListener('click', () => busy($('#refresh-workspace'), async () => {
+  if (state.dirty && !confirm('Reload and discard unsaved changes? Export or save your edits first.')) return;
+  await loadWorkspace(); toast('Workspace reloaded.');
 }));
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => navigate(button.dataset.view)));
 function navigate(view) {
-  if (state.dirty && !confirm('Discard your unsaved campaign changes?')) return;
+  if (view === state.view) return;
+  if (state.dirty && !confirm('Discard unsaved changes in this view?')) { $('#mobile-view').value = state.view === 'detail' ? 'dashboard' : state.view; return; }
+  workspaceUI.discardEdits();
   state.dirty = false; state.view = view; render();
 }
 window.addEventListener('beforeunload', event => { if (state.dirty) { event.preventDefault(); event.returnValue = ''; } });
-const headings = { dashboard: 'Overview', composer: 'Create campaign', brand: 'Brand profile', automation: 'Automation', detail: 'Campaign', products: 'Products', studio: 'Content studio', creative: 'Ad designer', calendar: 'Calendar', results: 'Results', data: 'Backup & exports' };
+const headings = { dashboard: 'Overview', composer: 'Create campaign', brand: 'Brand profile', automation: 'Automation', detail: 'Campaign', products: 'Products', strategy: 'Strategy', studio: 'Content studio', creative: 'Ad designer', calendar: 'Calendar', results: 'Results', data: 'Backup & exports' };
+for (const [value, label] of Object.entries(headings)) if (value !== 'detail') { const option = document.createElement('option'); option.value = value; option.textContent = label; $('#mobile-view').append(option); }
+$('#mobile-view').addEventListener('change', event => navigate(event.target.value));
 function render() {
+  $('#mobile-view').value = state.view === 'detail' ? 'dashboard' : state.view;
   $('#breadcrumb').textContent = `Workspace / ${headings[state.view]}`;
   document.querySelectorAll('nav [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === state.view || (state.view === 'detail' && button.dataset.view === 'dashboard')));
   if (workspaceUI.views.includes(state.view)) workspaceUI.render(state.view);
@@ -82,9 +112,18 @@ function dashboard() {
   const active = state.campaigns.filter(c => ['scheduled', 'running'].includes(c.status)).length;
   const review = state.campaigns.filter(c => c.status === 'awaiting approval').length;
   const spent = state.campaigns.reduce((sum, c) => sum + c.spent, 0);
+  const steps = [
+    { done: !!state.brand, view: 'brand', label: 'Set your brand facts' },
+    { done: state.workspace.products.length > 0, view: 'products', label: 'Save a product and audience' },
+    { done: state.workspace.briefs.length > 0, view: 'strategy', label: 'Choose a measurable goal' },
+    { done: state.workspace.drafts.some(d => d.stage === 'ready' && d.sourceRevision === state.workspace.products.find(p => p.id === d.productId)?.revision), view: 'studio', label: 'Prepare and review content' },
+    { done: state.campaigns.length > 0, view: 'composer', label: 'Review a campaign plan' },
+    { done: state.workspace.results.length > 0, view: 'results', label: 'Record your actual outcomes' }
+  ];
   $('#view').innerHTML = `
     <div class="page-heading"><div><p class="eyebrow">LET’S MAKE THINGS HAPPEN</p><h1>Your marketing, in motion.</h1><p>A clear view of what’s ready, what’s running, and what comes next.</p></div><button class="button primary" data-go="composer">+ New campaign</button></div>
     <section class="hero"><div><p class="eyebrow">FROM IDEA TO ACTION</p><h2>You bring the idea.<br>We’ll help with the campaign.</h2><p>Describe your next promotion. Get a plan, content, and a schedule — all in one place.</p><button class="button lime" data-go="${state.brand ? 'composer' : 'brand'}">${state.brand ? 'Let’s create a campaign' : 'Set up your brand'} <span>↗</span></button></div><div class="hero-art" aria-hidden="true"><div class="hero-orbit"><span>✧</span></div></div></section>
+    <section class="card"><div class="section-heading"><h2>Your next steps</h2><span class="small muted">${steps.filter(s => s.done).length}/${steps.length} preparation steps</span></div><div class="onboarding-steps">${steps.map(s => `<button data-go="${s.view}" class="onboarding-step"><span>${s.done ? '✓' : '○'}</span>${s.label}</button>`).join('')}</div><p class="small muted">A completed checklist is preparation progress, not proof of marketing performance.</p></section>
     <div class="stats"><div class="stat"><p>Active campaigns</p><strong>${active.toString().padStart(2, '0')}</strong><small>Scheduled or running in demo</small></div><div class="stat"><p>Ready for your review</p><strong>${review.toString().padStart(2, '0')}</strong><small>Your approval comes first</small></div><div class="stat"><p>Simulated allocation used</p><strong>${money(spent)}</strong><small>Actual advertising spend: 0 DKK</small></div></div>
     <div class="section-heading"><h2>Your campaigns <span class="muted small">(${state.campaigns.length})</span></h2><span class="small muted">All activity is demo activity</span></div>
     <div class="campaign-list">${state.campaigns.length ? state.campaigns.map(c => `<button class="campaign-row" data-campaign="${esc(c.id)}"><span class="campaign-icon" aria-hidden="true">↗</span><div><h3>${esc(c.data.title)}</h3><p>${esc(c.data.audience)} · ${c.data.items.length} content pieces</p></div>${badge(c.status)}<div class="row-budget">${money(c.data.budget)}<p>Simulated budget</p></div></button>`).join('') : `<div class="empty"><div class="empty-symbol">✧</div><h3>Your next campaign starts here.</h3><p>${state.brand ? 'Tell your companion what you want to promote.' : 'Save your brand profile, then describe your first promotion.'}</p><button class="button" data-go="${state.brand ? 'composer' : 'brand'}">${state.brand ? 'Create your first campaign →' : 'Add your brand →'}</button></div>`}</div>`;
@@ -99,7 +138,8 @@ function brandForm() {
   $('#view').innerHTML = `<div class="page-heading"><div><p class="eyebrow">THE FOUNDATION</p><h1>Make it sound like you.</h1><p>Give your companion the facts it needs to create relevant campaigns.</p></div>${state.brand ? '<span class="pill completed">PROFILE SAVED</span>' : ''}</div>
     <form id="brand-form"><section class="card"><h2>Your business</h2><p class="muted">${browserDemo ? 'Saved in this browser only, without account authentication.' : 'These details are private to your account.'}</p><div class="form-grid">${input('name', 'Business name', 'Your business', 120)}${input('product', 'Main product or offer', 'Your sales course', 200)}<label class="span-2">Business details<textarea name="business" maxlength="2000" required placeholder="What do you offer, and who is it for?">${esc(b.business)}</textarea></label>${input('audience', 'Default audience', 'Danish small-business owners', 400)}${input('tone', 'Brand tone', 'Friendly, clear, practical', 120)}<label>Default campaign language<select aria-label="Default campaign language" name="language"><option value="ar" ${b.language !== 'en' ? 'selected' : ''}>العربية</option><option value="en" ${b.language === 'en' ? 'selected' : ''}>English</option></select></label><label class="span-2">Website or product link (optional)<input name="website" type="url" value="${esc(b.website)}" placeholder="Optional product URL" maxlength="1000"><small>Used as the campaign link. Website content is not imported in this release.</small></label></div></section>
     <section class="card"><h2>Approved marketing claims</h2><p class="muted">Only add facts you can substantiate. Leave blank if you have no approved claims.</p><label>One claim per line<textarea name="claims" maxlength="4000" placeholder="For example, the actual course duration or topics covered.">${esc(b.claims)}</textarea></label><div class="note">The demo planner uses product details and your approved claims. It does not invent testimonials, results, or performance promises. Tone is stored in the brief; templates do not reliably adapt writing style yet.</div><button class="button primary" type="submit">Save brand profile →</button></section></form>`;
-  $('#brand-form').addEventListener('submit', event => { event.preventDefault(); busy(event.submitter, async () => { state.brand = await api('/brand', 'PUT', Object.fromEntries(new FormData(event.target))); toast('Brand profile saved.'); navigate('composer'); }); });
+  $('#brand-form').addEventListener('input', () => state.dirty = true);
+  $('#brand-form').addEventListener('submit', event => { event.preventDefault(); busy(event.submitter, async () => { const data = Object.fromEntries(new FormData(event.target)); state.brand = await freezeForm(event.target, () => api('/brand', 'PUT', data)); state.dirty = false; toast('Brand profile saved.'); navigate('composer'); }); });
 }
 function composer() {
   const b = state.brand;
@@ -109,7 +149,7 @@ function composer() {
     <form id="chat-form" class="chat-form">${state.workspace.products.length ? `<label>Campaign product<select aria-label="Campaign product" id="campaign-product"><option value="">Use brand profile</option>${state.workspace.products.map(p => `<option value="${p.id}" ${p.id === state.selectedProduct ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select><small>A selected product supplies its audience, link, and approved facts.</small></label>` : ''}${state.pendingDraft ? `<div class="note">Your saved ${esc(state.pendingDraft.language === 'ar' ? 'Arabic' : 'English')} draft will become the first campaign content piece. Review the remaining pieces separately. <button class="text-button" type="button" id="clear-selected-draft">Remove saved draft</button></div>` : ''}<label for="request">Your campaign request</label><textarea id="request" name="request" required maxlength="4000" placeholder="Promote my sales course to Danish small-business owners for two weeks, with a total budget of 1,000 DKK.">${esc(state.message)}</textarea><div id="missing-fields">${state.pending ? missingFields(state.pending) : ''}</div><div class="chat-footer"><span>Nothing publishes until approved or explicitly allowed by your automation policy.</span><button class="button primary" type="submit" ${b ? '' : 'disabled'}>Build my campaign <span>↗</span></button></div></form></section>
     <aside class="composer-context"><div class="card context-card"><h3>Your brand, at a glance</h3>${b ? `<div class="context-item"><small>Business</small><p>${esc(b.name)}</p></div><div class="context-item"><small>Audience</small><p>${esc(b.audience)}</p></div><div class="context-item"><small>Tone</small><p>${esc(b.tone)}</p></div><button class="text-button" data-go="brand">Edit brand profile ↗</button>` : '<p class="muted">Your brand context will appear here.</p>'}</div><div class="card steps"><h3>From idea to launch</h3><p>Describe your promotion</p><p>Edit the campaign plan</p><p>Review and approve</p><p>Watch the demo run</p></div></aside></div>`;
   bindNavigation();
-  $('#campaign-product')?.addEventListener('change', event => { state.selectedProduct = event.target.value; state.pendingDraft = null; composer(); });
+  $('#campaign-product')?.addEventListener('change', event => { state.selectedProduct = event.target.value; state.pendingDraft = null; state.activeBrief = null; composer(); });
   $('#clear-selected-draft')?.addEventListener('click', () => { state.pendingDraft = null; composer(); });
   document.querySelectorAll('[data-example]').forEach(button => button.addEventListener('click', () => { $('#request').value = button.dataset.example; state.message = button.dataset.example; state.pending = null; $('#missing-fields').innerHTML = ''; $('#request').focus(); }));
   $('#request').addEventListener('input', () => { state.message = $('#request').value; if (state.pending) { state.pending = null; $('#missing-fields').innerHTML = ''; } });
@@ -119,21 +159,28 @@ function composer() {
       const fields = new FormData(event.target), details = {};
       const product = state.workspace.products.find(p => p.id === state.selectedProduct);
       if (product) Object.assign(details, { product: product.name, audience: product.audience, productFacts: product.facts, productWebsite: product.website, productCta: product.cta });
+      if (state.activeBrief && product && state.activeBrief.productId === product.id) { details.goalObjective = briefObjective(state.activeBrief); details.goalPlan = structuredClone(state.activeBrief); }
       if (state.pendingDraft) details.language = state.pendingDraft.language;
       if (state.pendingDraft?.content.length > 4000) throw new Error('Shorten the saved draft to 4,000 characters before using it in a campaign.');
       for (const key of ['budget', 'days']) if (fields.has(key)) details[key] = Number(fields.get(key));
-      const result = await api('/plan', 'POST', { message: state.message, details });
-      if (result.missing.length) { state.pending = result; $('#missing-fields').innerHTML = missingFields(result); $('#missing-fields input')?.focus(); }
-      else {
-        state.pending = null; state.campaign = result.campaign;
-        if (state.pendingDraft) {
-          const c = state.campaign, data = structuredClone(c.data);
-          data.items[0].content = state.pendingDraft.content;
-          data.items[0].channel = state.pendingDraft.format === 'ad' ? 'Paid social' : 'Social post';
-          state.campaign = await api(`/campaigns/${c.id}`, 'PUT', { data, revision: c.revision }); state.pendingDraft = null;
+      const submittedDraft = state.pendingDraft, message = state.message, editor = event.target;
+      await freezeForm(editor, async () => {
+        const result = await api('/plan', 'POST', { message, details });
+        if (result.missing.length) {
+          if ($('#chat-form') === editor) { state.pending = result; $('#missing-fields').innerHTML = missingFields(result); $('#missing-fields input')?.focus(); }
+          return;
         }
-        state.campaigns = await api('/campaigns'); state.view = 'detail'; state.dirty = false; render(); toast('Your campaign draft is ready.');
-      }
+        let campaign = result.campaign;
+        if (submittedDraft) {
+          const data = structuredClone(campaign.data); data.items[0].content = submittedDraft.content;
+          data.items[0].channel = submittedDraft.format === 'ad' ? 'Paid social' : 'Social post';
+          campaign = await api(`/campaigns/${campaign.id}`, 'PUT', { data, revision: campaign.revision });
+          if (state.pendingDraft === submittedDraft) state.pendingDraft = null;
+        }
+        state.campaigns = await api('/campaigns');
+        if ($('#chat-form') === editor) { state.pending = null; state.campaign = campaign; state.view = 'detail'; state.dirty = false; render(); }
+        toast('Your campaign draft is ready.');
+      });
     });
   });
 }
@@ -188,16 +235,16 @@ function detail() {
   $('#demo-now')?.addEventListener('click', () => { document.querySelectorAll('input[type=datetime-local]').forEach(input => { input.value = localInput(Date.now()); }); $('#campaign-form').dispatchEvent(new Event('input')); });
   document.querySelectorAll('[data-regenerate]').forEach(button => button.addEventListener('click', () => busy(button, async () => {
     if (state.dirty) { toast('Save your edits before regenerating content.'); return; }
-    state.campaign = await api(`/campaigns/${c.id}/regenerate`, 'POST', { itemId: button.dataset.regenerate, revision: c.revision });
-    state.campaigns = await api('/campaigns'); render(); toast('Content variation regenerated. Review it before approving.');
+    await refreshCampaignMutation(c, `/campaigns/${c.id}/regenerate`, { itemId: button.dataset.regenerate, revision: c.revision });
+    toast('Content variation regenerated. Review it before approving.');
   })));
   $('#review-confirm')?.addEventListener('change', event => { $('[data-action=approve]').disabled = !event.target.checked || state.dirty; });
   document.querySelectorAll('[data-action]').forEach(button => button.addEventListener('click', () => busy(button, async () => {
     const action = button.dataset.action;
     if (state.dirty && ['approve', 'submit'].includes(action)) { toast('Save your changes before approval.'); return; }
     if (action === 'cancel' && !confirm('Cancel this campaign and stop all pending jobs?')) return;
-    state.campaign = await api(`/campaigns/${c.id}/action`, 'POST', { action, revision: c.revision });
-    state.campaigns = await api('/campaigns'); state.dirty = false; render(); toast(`Campaign ${state.campaign.status}.`);
+    const next = await refreshCampaignMutation(c, `/campaigns/${c.id}/action`, { action, revision: c.revision });
+    toast(`Campaign ${next.status}.`);
   })));
 }
 async function saveEdits() {
@@ -208,8 +255,16 @@ async function saveEdits() {
     item.account = form.get(`account-${item.id}`); item.due = new Date(form.get(`due-${item.id}`)).getTime();
     item.cost = Math.round(Number(form.get(`cost-${item.id}`)) * 100);
   }
-  state.campaign = await api(`/campaigns/${c.id}`, 'PUT', { data, revision: c.revision });
-  state.campaigns = await api('/campaigns'); state.dirty = false; render();
+  await refreshCampaignMutation(c, `/campaigns/${c.id}`, { data, revision: c.revision }, 'PUT');
+}
+async function refreshCampaignMutation(c, path, payload, method = 'POST') {
+  const next = await freezeForm($('#campaign-form'), async () => {
+    const campaign = await api(path, method, payload);
+    state.campaigns = await api('/campaigns'); return campaign;
+  });
+  if (state.view === 'detail' && state.campaign?.id === c.id) { state.campaign = next; state.dirty = false; render(); }
+  else if (state.view === 'dashboard') render();
+  return next;
 }
 
 // Poll only views that cannot contain unsaved form edits.

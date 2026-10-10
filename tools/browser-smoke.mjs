@@ -10,6 +10,10 @@ const base = process.env.TEST_ORIGIN || 'http://127.0.0.1:3101';
 const pagesMode = process.env.TEST_PAGES === 'true';
 const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
 const errors = [];
+const nav = async name => {
+  if (await page.getByLabel('Workspace navigation', { exact: true }).isVisible()) await page.getByLabel('Workspace navigation', { exact: true }).selectOption({ label: name });
+  else await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name, exact: true }).click();
+};
 page.on('pageerror', error => errors.push(error.message));
 page.on('console', message => { if (message.type() === 'error' && !message.text().includes('401')) errors.push(message.text()); });
 await mkdir('test-results', { recursive: true });
@@ -62,7 +66,7 @@ try {
   await page.screenshot({ path: 'test-results/desktop-campaign.png', fullPage: true });
   await page.getByRole('button', { name: '← All campaigns', exact: true }).click();
   await page.screenshot({ path: 'test-results/desktop-overview.png', fullPage: true });
-  await page.getByRole('button', { name: 'Automation', exact: true }).click();
+  await nav('Automation');
   await page.getByLabel('Enable automatic mode for matching campaigns', { exact: true }).check();
   await page.getByLabel('Demo workspace', { exact: true }).check();
   await page.getByLabel('Product promotion', { exact: true }).check();
@@ -79,11 +83,11 @@ try {
   await page.locator('.campaign-row').click();
   await page.getByRole('heading', { name: 'The campaign brief' }).waitFor(); await fits();
   await page.screenshot({ path: 'test-results/mobile-campaign.png', fullPage: true });
-  await page.getByRole('button', { name: 'Brand profile', exact: true }).click();
+  await nav('Brand profile');
   await page.getByRole('heading', { name: 'Make it sound like you.' }).waitFor(); await fits();
   assert.equal(await page.getByLabel('Business name', { exact: true }).inputValue(), 'North Studio');
-  await page.getByRole('button', { name: 'Create campaign', exact: true }).click(); await fits();
-  await page.getByRole('button', { name: 'Automation', exact: true }).click(); await fits();
+  await nav('Create campaign'); await fits();
+  await nav('Automation'); await fits();
   assert.ok(await page.getByLabel('Enable automatic mode for matching campaigns', { exact: true }).isChecked());
   if (pagesMode) {
     page.once('dialog', dialog => dialog.accept());

@@ -1,5 +1,13 @@
 # Verification — 9 October 2026
 
+## Deep audit release — 10 October 2026
+
+All **30** Node tests passed after the audit improvements. New regressions cover independent kit/draft buffers, typing during pending saves, meaningful variations across every objective/format/language, legacy workspace migration, measurable brief validation, independent campaign-goal snapshots, content filters, scoped report calculations, and paired-data coverage. Authentication tests cover exact whitespace-preserving new passwords and compatible legacy hashes.
+
+`tools/audit-smoke.mjs` passed on static Pages and authenticated Node: mixed saves in both orders, filtered/hidden edits, guarded deletion, source-readiness invalidation, strategy-to-campaign goals, campaign/date analytics, missing measurements, mobile selection navigation, and empty private views after logout. Original campaign and free-workspace Chrome scripts also passed. Strategy, reporting, and mobile screenshots were visually checked.
+
+The comparison uses official public Buffer, Mailchimp, and HubSpot documentation; it is not a paid-dashboard benchmark. The full findings and deferred deployment/provider requirements are in `docs/AUDIT_2026-10-10.md`. Live-site verification follows deployment.
+
 ## Free workspace release
 
 All **22** Node tests passed after adding the free tools. Coverage now includes Arabic request digits/durations, optional links, approved product-fact snapshots, six content formats, workspace validation and optimistic revision conflicts, null-aware manual metrics, CSV formula escaping, Unicode-safe UTC calendar exports, legacy Pages migration, safe campaign duplication, and validation-before-replacement backup restoration. Authenticated-server tests verify restoration changes only the requesting account and recreates campaigns as drafts without jobs/receipts.

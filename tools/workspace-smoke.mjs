@@ -8,7 +8,10 @@ const origin = process.env.TEST_ORIGIN || 'http://127.0.0.1:3102/Marketing101/';
 const serverMode = process.env.TEST_SERVER === 'true';
 const errors = [];
 page.on('pageerror', error => errors.push(error.message));
-const nav = name => page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name, exact: true }).click();
+const nav = async name => {
+  if (await page.getByLabel('Workspace navigation', { exact: true }).isVisible()) await page.getByLabel('Workspace navigation', { exact: true }).selectOption({ label: name });
+  else await page.getByRole('navigation', { name: 'Main navigation' }).getByRole('button', { name, exact: true }).click();
+};
 const fits = async () => assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'No horizontal page overflow');
 await mkdir('test-results', { recursive: true });
 async function download(button, name) {
