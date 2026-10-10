@@ -135,3 +135,11 @@ npm run check
 The Node test suite covers parsing, approval invalidation, revision conflicts, account isolation, authentication/logout, CSRF/origin rejection, budget caps, automatic policy revocation/daily limits, pause/resume/cancel, adapter failures/retries, exact receipt content, and two independent workers sharing persisted jobs. It also tests the Pages artifact allowlist and the browser demo's persistence, approval, limits, and duplicate prevention. CI runs both commands on Node 24.16.0.
 
 See `docs/VERIFICATION.md` for the observed test and browser results. No real-provider functionality is claimed or verified.
+
+## User manual
+
+Open **دليل الاستخدام / User manual** in the workspace navigation (also available on mobile), or open `manual.html` directly without signing in. The Arabic guide covers current features, demo limitations, approval, execution states, results and backup. Its print button opens the browser print dialog for paper or PDF output.
+
+The shared guide source is `public/user-manual.js`. For each application change, update affected instructions and `reviewedOn`, then run `npm run manual:reviewed`. Commit the generated `docs/user-manual-review.json` with the change. `npm run manual:check` runs in required CI and Pages publishing and blocks unreviewed application changes. It checks file fingerprints, not instructional accuracy; review is still required. If instructions remain accurate after an internal change, record that conclusion in the PR. See `AGENTS.md` for the maintenance rule.
+
+Browser validation: run `node tools/manual-smoke.mjs` against the Pages preview, with `PLAYWRIGHT_MODULE` and `TEST_BROWSER_CHANNEL` configured if needed. `TEST_ORIGIN` can point it at the published site.

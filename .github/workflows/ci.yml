@@ -13,4 +13,5 @@ jobs:
         with:
           node-version: '24.16.0'
       - run: npm run check
+      - run: npm run manual:check
       - run: npm test

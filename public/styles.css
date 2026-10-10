@@ -11,3 +11,19 @@
 @media(max-width:1100px){.tool-grid,.kit-grid{grid-template-columns:minmax(0,1fr)}.form-grid.four{grid-template-columns:1fr 1fr}.result-stats{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:740px){.form-grid.four{grid-template-columns:1fr}.result-stats{grid-template-columns:1fr 1fr}.calendar-entry{grid-template-columns:1fr;gap:8px}.section-heading{gap:10px;flex-wrap:wrap}.sidebar nav{flex-shrink:0}.tool-grid .form-actions,.kit-grid .form-actions{gap:8px}.tool-grid .button,.kit-grid .button{padding:10px 13px}}
 .mobile-nav{display:none}.onboarding-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.onboarding-step{display:flex;align-items:center;gap:10px;text-align:left;padding:14px;border:1px solid var(--line);border-radius:10px;background:#f8faf4;color:var(--ink);font-size:12px}.onboarding-step span{font-size:18px;color:var(--green)}.preparation-list{padding-left:22px;font-size:13px;line-height:1.9;color:#5b6b56}.preparation-list li{margin-bottom:10px}#draft-filter{background:#f8faf4}#draft-filter p{margin:12px 0 0}#report-filter p{margin:12px 0 0}
 @media(max-width:740px){.mobile-nav{display:block;margin:18px 0 0;font-size:11px}.mobile-nav select{font-size:13px;background:#f2f6e9}.sidebar nav{display:none}.onboarding-steps{grid-template-columns:1fr}.topbar{gap:10px}.topbar-actions{gap:12px}.topbar .pill{font-size:9px}}
+/* The in-app and standalone manual share the same responsive presentation. */
+.manual-page #manual-root { max-width: 960px; margin: 0 auto; padding: 28px 20px; }
+.user-manual { max-width: 960px; margin: 0 auto; text-align: start; line-height: 1.9; overflow-wrap: anywhere; }
+.user-manual header { margin-bottom: 24px; }
+.user-manual .card { margin-bottom: 18px; scroll-margin-top: 24px; }
+.user-manual h1 { font-size: clamp(28px, 5vw, 42px); }
+.user-manual h2 { line-height: 1.5; }
+.user-manual ol { padding-inline-start: 24px; }
+.user-manual li { margin-block: 10px; }
+.manual-toc a { display: block; padding: 6px 0; color: #235a43; }
+@media print {
+  body:has(.user-manual) .sidebar, body:has(.user-manual) .topbar, .user-manual header .button, .user-manual .manual-toc, #toast { display: none !important; }
+  body:has(.user-manual) .app-shell { display: block; }
+  .user-manual .card { box-shadow: none; border: 0; padding: 0; }
+  .user-manual h2 { break-after: avoid; }
+}

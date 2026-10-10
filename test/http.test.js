@@ -14,6 +14,12 @@ test('authenticated HTTP journey, access controls, CSRF and exact approval', asy
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   t.after(async () => { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); db.close(); });
   const base = `http://127.0.0.1:${server.address().port}`;
+  const guide = await fetch(`${base}/manual.html`);
+  assert.equal(guide.status, 200);
+  assert.match(await guide.text(), /lang="ar" dir="rtl"/);
+  const guideModule = await fetch(`${base}/user-manual.js`);
+  assert.equal(guideModule.status, 200);
+  assert.match(await guideModule.text(), /export function renderManual/);
   function client() {
     let cookie = '', csrf = '';
     return async (path, method = 'GET', body, overrides = {}) => {
